@@ -1,4 +1,5 @@
 import os, sqlite3, secrets, urllib.parse
+import base64, hashlib, hmac, time
 
 # Load a local .env file without requiring another package.
 _ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
