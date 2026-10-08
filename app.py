@@ -152,8 +152,19 @@ def home():
 
 @app.route("/discord-test")
 def discord_test():
-    r = requests.get(f"{DISCORD_API}/users/@me", timeout=15)
-    return f"Discord status: {r.status_code}\n\n{r.text[:500]}", r.status_code
+    r = requests.post(
+        "https://discord.com/api/oauth2/token",
+        data={
+            "client_id": "0",
+            "client_secret": "0",
+            "grant_type": "authorization_code",
+            "code": "0",
+            "redirect_uri": DISCORD_REDIRECT_URI,
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=15,
+    )
+    return f"Discord OAuth status: {r.status_code}\n\n{r.text[:500]}", r.status_code
 
 
 @app.route("/login")
