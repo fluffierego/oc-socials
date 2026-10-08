@@ -37,6 +37,16 @@ def conn():
 
 def init():
     c = conn()
+    c.execute("CREATE TABLE IF NOT EXISTS login_codes (code TEXT PRIMARY KEY, discord_id INTEGER NOT NULL, expires_at INTEGER NOT NULL)")
+    c.execute("""CREATE TABLE IF NOT EXISTS login_codes (
+        code TEXT PRIMARY KEY,
+        discord_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    )""")
+    c.commit()
+    c.close()
+    c = conn()
+    c = conn()
     c.executescript("""
     CREATE TABLE IF NOT EXISTS users(
       id INTEGER PRIMARY KEY,
