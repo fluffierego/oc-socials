@@ -1,1 +1,41 @@
-<!doctype html><html><head><title>iMessage</title><link rel="stylesheet" href="/static/style.css"></head><body><nav><b>iMessage</b><span><a href="/">Home</a><a href="/instagram">Instagram</a><a href="/twitter">Twitter/X</a><a href="/chat/new">+ Group Chat</a></span></nav><main><section class="card"><h1>Your group chats</h1>{% for c in chats %}<a class="chat-link" href="/chat/{{c['id']}}"><b>{{c['name']}}</b><small>Open conversation →</small></a>{% else %}<p>No chats yet. <a href="/chat/new">Create one.</a></p>{% endfor %}</section></main></body></html>
+<!doctype html>
+<html>
+<head>
+  <title>iMessage</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav>
+  <b>iMessage</b>
+  <span>
+    <a href="/">Home</a>
+    <a href="/instagram">Instagram</a>
+    <a href="/twitter">Twitter/X</a>
+    <a href="/chat/new?type=direct">+ New Chat</a>
+    <a href="/chat/new?type=group">+ Group Chat</a>
+  </span>
+</nav>
+
+<main>
+  <section class="card">
+    <h1>iMessage</h1>
+
+    <div class="chat-actions">
+      <a class="button" href="/chat/new?type=direct">💬 New 1-on-1 Chat</a>
+      <a class="button" href="/chat/new?type=group">👥 New Group Chat</a>
+    </div>
+
+    <h2>Your conversations</h2>
+
+    {% for c in chats %}
+      <a class="chat-link" href="/chat/{{c['id']}}">
+        <b>{{c['name']}}</b>
+        <small>Open conversation →</small>
+      </a>
+    {% else %}
+      <p>No conversations yet.</p>
+    {% endfor %}
+  </section>
+</main>
+</body>
+</html>

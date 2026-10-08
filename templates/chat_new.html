@@ -1,1 +1,104 @@
-<!doctype html><html><head><title>New iMessage group</title><link rel="stylesheet" href="/static/style.css"></head><body><main class="card narrow"><h1>New iMessage group chat</h1><p>Choose the OCs you want to control in this chat. Other people can later add their own OCs when you give them access through the app.</p>{% if error %}<p class="error">{{error}}</p>{% endif %}<form method="post"><input name="name" placeholder="the aussie gc" required><h3>Your OCs</h3>{% for oc in ocs %}<label class="check"><input type="checkbox" name="oc_ids" value="{{oc['id']}}"> {{oc['name']}} (@{{oc['username']}})</label>{% else %}<p>You need an OC first.</p>{% endfor %}<button>Create group chat</button></form><p><a href="/messages">← Back</a></p></main></body></html>
+<!doctype html>
+<html>
+<head>
+  <title>{% if chat_type == "direct" %}New iMessage{% else %}New Group Chat{% endif %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <b>iMessage</b>
+  <span>
+    <a href="/messages">← Messages</a>
+    <a href="/">Home</a>
+  </span>
+</nav>
+
+<main>
+  <section class="card narrow">
+
+    {% if chat_type == "direct" %}
+      <h1>💬 New 1-on-1 Chat</h1>
+      <p>Choose another person's OC to message.</p>
+    {% else %}
+      <h1>👥 New Group Chat</h1>
+      <p>Choose the OCs you want to control in this group chat.</p>
+    {% endif %}
+
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post">
+
+      <input
+        name="name"
+        placeholder="{% if chat_type == 'direct' %}Chat name (optional){% else %}Group chat name{% endif %}"
+        {% if chat_type == "group" %}required{% endif %}
+      >
+
+      {% if chat_type == "direct" %}
+
+        <h3>Send as your OC</h3>
+
+        {% for myoc in own_ocs %}
+          <label class="check">
+            <input type="radio" name="my_oc_id" value="{{ myoc['id'] }}" required>
+            {% if myoc['avatar'] %}
+              <img src="{{ myoc['avatar'] }}" style="width:32px;height:32px;border-radius:50%;vertical-align:middle;object-fit:cover;">
+            {% endif %}
+            {{ myoc['name'] }} (@{{ myoc['username'] }})
+          </label>
+        {% else %}
+          <p>You need one of your own OCs first.</p>
+        {% endfor %}
+
+        <h3>Choose an OC to message</h3>
+
+        {% for oc in ocs %}
+          {% if oc['owner_id'] != user['id'] %}
+            <label class="check">
+              <input type="radio" name="oc_ids" value="{{ oc['id'] }}" required>
+              {% if oc['avatar'] %}
+                <img src="{{ oc['avatar'] }}" style="width:32px;height:32px;border-radius:50%;vertical-align:middle;object-fit:cover;">
+              {% endif %}
+              {{ oc['name'] }} (@{{ oc['username'] }})
+            </label>
+          {% endif %}
+        {% else %}
+          <p>No other OCs are available yet.</p>
+        {% endfor %}
+
+      {% else %}
+
+        <h3>Your OCs</h3>
+
+        {% for oc in own_ocs %}
+          <label class="check">
+            <input type="checkbox" name="oc_ids" value="{{ oc['id'] }}">
+            {% if oc['avatar'] %}
+              <img src="{{ oc['avatar'] }}" style="width:32px;height:32px;border-radius:50%;vertical-align:middle;object-fit:cover;">
+            {% endif %}
+            {{ oc['name'] }} (@{{ oc['username'] }})
+          </label>
+        {% else %}
+          <p>You need an OC first.</p>
+        {% endfor %}
+
+      {% endif %}
+
+      <button type="submit">
+        {% if chat_type == "direct" %}
+          Start Chat
+        {% else %}
+          Create Group Chat
+        {% endif %}
+      </button>
+
+    </form>
+
+  </section>
+</main>
+
+</body>
+</html>

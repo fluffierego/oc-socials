@@ -78,6 +78,11 @@ def init():
       oc_id INTEGER NOT NULL,
       UNIQUE(chat_id, oc_id)
     );
+    CREATE TABLE IF NOT EXISTS chat_users(
+      chat_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      UNIQUE(chat_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS messages(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       chat_id INTEGER NOT NULL,
@@ -94,6 +99,7 @@ def init():
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
     if "owner_id" not in chat_columns:
         c.execute("ALTER TABLE chats ADD COLUMN owner_id INTEGER DEFAULT 0")
+    c.execute("""INSERT OR IGNORE INTO chat_users(chat_id,user_id) SELECT cm.chat_id,o.owner_id FROM chat_members cm JOIN ocs o ON o.id=cm.oc_id""")
     c.commit()
     c.close()
 
@@ -264,9 +270,8 @@ def messages():
     chats = c.execute("""
       SELECT DISTINCT c.*
       FROM chats c
-      JOIN chat_members cm ON cm.chat_id=c.id
-      JOIN ocs o ON o.id=cm.oc_id
-      WHERE o.owner_id=?
+      JOIN chat_users cu ON cu.chat_id=c.id
+      WHERE cu.user_id=?
       ORDER BY c.id DESC
     """, (user_id,)).fetchall()
     c.close()
@@ -278,31 +283,178 @@ def messages():
 def new_chat():
     user = current_user()
     c = conn()
-    ocs = c.execute("SELECT * FROM ocs WHERE owner_id=? ORDER BY name", (user["id"],)).fetchall()
+
+    chat_type = request.args.get("type", "group")
+    if chat_type not in ("direct", "group"):
+        chat_type = "group"
+
+    own_ocs = c.execute(
+        "SELECT * FROM ocs WHERE owner_id=? ORDER BY name",
+        (user["id"],)
+    ).fetchall()
+
+    all_ocs = c.execute(
+        "SELECT * FROM ocs ORDER BY name"
+    ).fetchall()
+
     if request.method == "POST":
-        name = request.form.get("name", "").strip() or "New Group Chat"
-        selected = request.form.getlist("oc_ids")
-        valid = []
-        for value in selected:
+        name = request.form.get("name", "").strip()
+
+        if chat_type == "direct":
+            selected = request.form.getlist("oc_ids")
+
+            if len(selected) != 1:
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="Choose one OC to start the 1-on-1 chat."
+                )
+
             try:
-                oid = int(value)
+                other_oc_id = int(selected[0])
             except ValueError:
-                continue
-            row = c.execute("SELECT id FROM ocs WHERE id=? AND owner_id=?", (oid, user["id"])).fetchone()
-            if row:
-                valid.append(oid)
-        if not valid:
-            c.close()
-            return render_template("chat_new.html", ocs=ocs, user=user, error="Choose at least one of your OCs.")
-        c.execute("INSERT INTO chats(name,owner_id) VALUES(?,?)", (name, user["id"]))
-        chat_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
-        c.executemany("INSERT OR IGNORE INTO chat_members(chat_id,oc_id) VALUES(?,?)",
-                      [(chat_id, oid) for oid in valid])
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="Invalid OC."
+                )
+
+            other_oc = c.execute(
+                "SELECT * FROM ocs WHERE id=?",
+                (other_oc_id,)
+            ).fetchone()
+
+            if not other_oc:
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="That OC could not be found."
+                )
+
+            if other_oc["owner_id"] == user["id"]:
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="Choose another person's OC for a 1-on-1 chat."
+                )
+
+            if not own_ocs:
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="You need one of your own OCs first."
+                )
+
+            my_oc_id = request.form.get("my_oc_id")
+            try:
+                my_oc_id = int(my_oc_id)
+            except (TypeError, ValueError):
+                c.close()
+                return render_template("chat_new.html", ocs=all_ocs, own_ocs=own_ocs, user=user, chat_type=chat_type, error="Choose which of your OCs you want to use for this chat.")
+            my_oc = c.execute("SELECT * FROM ocs WHERE id=? AND owner_id=?", (my_oc_id, user["id"])).fetchone()
+            if not my_oc:
+                c.close()
+                return render_template("chat_new.html", ocs=all_ocs, own_ocs=own_ocs, user=user, chat_type=chat_type, error="That is not one of your OCs.")
+            chat_name = name or other_oc["name"]
+
+            c.execute(
+                "INSERT INTO chats(name,owner_id) VALUES(?,?)",
+                (chat_name, user["id"])
+            )
+            chat_id = c.execute(
+                "SELECT last_insert_rowid()"
+            ).fetchone()[0]
+
+            c.executemany(
+                "INSERT OR IGNORE INTO chat_members(chat_id,oc_id) VALUES(?,?)",
+                [(chat_id, my_oc["id"]), (chat_id, other_oc["id"])]
+            )
+            c.executemany(
+                "INSERT OR IGNORE INTO chat_users(chat_id,user_id) VALUES(?,?)",
+                [(chat_id, user["id"]), (chat_id, other_oc["owner_id"])]
+            )
+
+        else:
+            selected = request.form.getlist("oc_ids")
+            valid = []
+
+            for value in selected:
+                try:
+                    oid = int(value)
+                except ValueError:
+                    continue
+
+                row = c.execute(
+                    "SELECT id FROM ocs WHERE id=? AND owner_id=?",
+                    (oid, user["id"])
+                ).fetchone()
+
+                if row:
+                    valid.append(oid)
+
+            if not valid:
+                c.close()
+                return render_template(
+                    "chat_new.html",
+                    ocs=all_ocs,
+                    own_ocs=own_ocs,
+                    user=user,
+                    chat_type=chat_type,
+                    error="Choose at least one of your OCs."
+                )
+
+            chat_name = name or "New Group Chat"
+
+            c.execute(
+                "INSERT INTO chats(name,owner_id) VALUES(?,?)",
+                (chat_name, user["id"])
+            )
+            chat_id = c.execute(
+                "SELECT last_insert_rowid()"
+            ).fetchone()[0]
+
+            c.executemany(
+                "INSERT OR IGNORE INTO chat_members(chat_id,oc_id) VALUES(?,?)",
+                [(chat_id, oid) for oid in valid]
+            )
+            c.executemany(
+                "INSERT OR IGNORE INTO chat_users(chat_id,user_id) VALUES(?,?)",
+                [(chat_id, user["id"])]
+            )
+
         c.commit()
         c.close()
         return redirect(url_for("chat", chat_id=chat_id))
+
     c.close()
-    return render_template("chat_new.html", ocs=ocs, user=user)
+
+    return render_template(
+        "chat_new.html",
+        ocs=all_ocs,
+        own_ocs=own_ocs,
+        user=user,
+        chat_type=chat_type
+    )
 
 
 @app.route("/chat/<int:chat_id>")
@@ -317,8 +469,12 @@ def chat(chat_id):
       SELECT o.* FROM ocs o JOIN chat_members cm ON cm.oc_id=o.id
       WHERE cm.chat_id=? ORDER BY o.name
     """, (chat_id,)).fetchall()
-    # Access is granted to a user if they own at least one member OC.
-    if not any(m["owner_id"] == current_user()["id"] for m in members):
+    # Access is granted to Discord users listed in chat_users.
+    allowed = c.execute(
+        "SELECT 1 FROM chat_users WHERE chat_id=? AND user_id=?",
+        (chat_id, current_user()["id"])
+    ).fetchone()
+    if not allowed:
         c.close()
         return "You are not a member of this chat.", 403
     msgs = c.execute("""
@@ -361,7 +517,7 @@ def new_oc():
 def edit_oc(oc_id):
     user = current_user()
     c = conn()
-    oc = c.execute("SELECT * FROM ocs WHERE id=? AND owner_id=?", (oc_id, user["id"])).fetchone()
+    oc = c.execute("SELECT * FROM ocs WHERE id=?", (oc_id,)).fetchone()
     if not oc:
         c.close()
         return "Not found", 404
@@ -481,7 +637,7 @@ def add_oc_to_chat(chat_id):
         return jsonify(error="Missing OC"), 400
     c = conn()
     chat_row = c.execute("SELECT * FROM chats WHERE id=?", (chat_id,)).fetchone()
-    oc = c.execute("SELECT * FROM ocs WHERE id=? AND owner_id=?", (oc_id, user["id"])).fetchone()
+    oc = c.execute("SELECT * FROM ocs WHERE id=?", (oc_id,)).fetchone()
     if not chat_row or not oc:
         c.close()
         return jsonify(error="Chat or OC not found"), 404
@@ -490,6 +646,7 @@ def add_oc_to_chat(chat_id):
         c.close()
         return jsonify(error="Only the chat creator can add OCs"), 403
     c.execute("INSERT OR IGNORE INTO chat_members(chat_id,oc_id) VALUES(?,?)", (chat_id, oc_id))
+    c.execute("INSERT OR IGNORE INTO chat_users(chat_id,user_id) VALUES(?,?)", (chat_id, oc["owner_id"]))
     c.commit()
     c.close()
     return jsonify(ok=True)

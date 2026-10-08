@@ -1,1 +1,162 @@
 *{box-sizing:border-box}body{margin:0;background:#f5f1f5;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}nav{height:64px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:5}nav span{display:flex;gap:18px;flex-wrap:wrap}a{color:inherit;text-decoration:none}main{max-width:900px;margin:30px auto;padding:20px}.feed{max-width:700px}.hero,.card,.post,.tweet{background:#fff;border:1px solid #ddd;border-radius:18px;margin:18px 0;padding:24px;box-shadow:0 2px 12px #0000000b}.narrow{max-width:650px;margin:60px auto}.actions{display:flex;gap:10px;flex-wrap:wrap}.btn,button{display:inline-block;background:#111;color:#fff;border:0;border-radius:12px;padding:12px 18px;cursor:pointer;font:inherit}.secondary{background:#eee;color:#111}.user{display:flex;align-items:center;gap:10px;margin-bottom:15px}.user img,.avatar,.members img,.message img,.reply img,.oc-card img{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#ddd}.user small{display:block}.photo{width:100%;max-height:700px;object-fit:cover;border-radius:14px;margin:10px 0}input,textarea,select{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:10px;background:#fff;font:inherit}textarea{min-height:90px}label{display:block;margin-top:10px;font-weight:600}.error{color:#b42318;background:#fee4e2;padding:12px;border-radius:10px}.banner{height:250px;background-size:cover;background-position:center;background:#ddd}.profile{background:#fff;border-radius:20px;overflow:hidden;padding:0}.profile-avatar{width:120px;height:120px;margin:-60px 0 0 30px;border:5px solid white;border-radius:50%;object-fit:cover;background:#ddd}.profile-body{padding:0 30px 20px}.profile-head{display:flex;align-items:center;justify-content:space-between;gap:20px}.profile-posts{padding:0 30px 30px}.post{margin:18px 0}.reply{border-top:1px solid #eee;padding:12px 0;display:grid;grid-template-columns:40px 1fr;column-gap:10px}.reply img{width:36px;height:36px;grid-row:span 2}.reply p{margin:3px 0}.reply-form{display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-top:12px}.reply-form input,.reply-form select{margin:0}.reply-form button{padding:8px 12px}.oc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}.oc-card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:7px}.oc-card img{width:80px;height:80px}.chat-link{background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;margin:10px 0;display:flex;justify-content:space-between}.check{font-weight:400;background:#f7f7f7;padding:12px;border-radius:10px}.check input{width:auto;margin-right:8px}.members{display:flex;gap:14px;flex-wrap:wrap}.members span{display:flex;align-items:center;gap:7px}.members img{width:38px;height:38px}.messages{background:#000;border-radius:18px;padding:20px;min-height:300px}.message{display:flex;gap:10px;margin:12px 0;color:#fff;max-width:80%}.message.mine{margin-left:auto;flex-direction:row-reverse}.message p{background:#262626;border-radius:16px;padding:10px 14px;margin:3px 0}.message.mine p{background:#147ef5}.message img{flex-shrink:0}code{background:#eee;padding:2px 5px;border-radius:4px}@media(max-width:700px){nav{height:auto;gap:10px;padding:15px}main{padding:10px}.reply-form{grid-template-columns:1fr}.profile-head{align-items:flex-start;flex-direction:column}}
+
+/* iMessage-style conversation */
+.imessage-shell{
+  max-width:760px;
+  margin:25px auto;
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:22px;
+  overflow:hidden;
+  box-shadow:0 4px 24px #00000012;
+}
+
+.imessage-header{
+  padding:16px 20px;
+  text-align:center;
+  border-bottom:1px solid #ddd;
+  background:#fff;
+}
+
+.imessage-header a{
+  display:block;
+  text-align:left;
+  font-size:14px;
+  margin-bottom:8px;
+}
+
+.imessage-avatar{
+  width:48px;
+  height:48px;
+  border-radius:50%;
+  object-fit:cover;
+  background:#ddd;
+}
+
+.imessage-header-name{
+  font-weight:700;
+  margin-top:5px;
+}
+
+.imessage-members{
+  font-size:12px;
+  color:#777;
+  margin-top:3px;
+}
+
+.imessage-messages{
+  min-height:500px;
+  max-height:600px;
+  overflow-y:auto;
+  padding:20px 16px;
+  background:#fff;
+}
+
+.imessage-row{
+  display:flex;
+  gap:8px;
+  align-items:flex-end;
+  margin:8px 0;
+}
+
+.imessage-row.mine{
+  justify-content:flex-end;
+}
+
+.imessage-row img{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  object-fit:cover;
+  flex-shrink:0;
+}
+
+.imessage-bubble{
+  max-width:70%;
+}
+
+.imessage-name{
+  font-size:11px;
+  color:#777;
+  margin:0 0 3px 5px;
+}
+
+.imessage-text{
+  padding:9px 13px;
+  border-radius:18px;
+  background:#e9e9eb;
+  color:#111;
+  word-wrap:break-word;
+}
+
+.imessage-row.mine .imessage-text{
+  background:#147ef5;
+  color:#fff;
+  border-bottom-right-radius:5px;
+}
+
+.imessage-row:not(.mine) .imessage-text{
+  border-bottom-left-radius:5px;
+}
+
+.imessage-time{
+  font-size:10px;
+  color:#999;
+  margin:3px 6px 0;
+}
+
+.imessage-composer{
+  border-top:1px solid #ddd;
+  padding:12px;
+  background:#fafafa;
+}
+
+.imessage-composer form{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.imessage-composer select{
+  width:150px;
+  margin:0;
+}
+
+.imessage-composer input{
+  flex:1;
+  margin:0;
+  border-radius:22px;
+}
+
+.imessage-composer button{
+  border-radius:50%;
+  width:44px;
+  height:44px;
+  padding:0;
+  font-size:18px;
+}
+
+@media(max-width:700px){
+  .imessage-shell{
+    margin:0;
+    border-radius:0;
+    border-left:0;
+    border-right:0;
+  }
+
+  .imessage-messages{
+    min-height:450px;
+  }
+
+  .imessage-composer form{
+    flex-wrap:wrap;
+  }
+
+  .imessage-composer select{
+    width:100%;
+  }
+
+  .imessage-bubble{
+    max-width:82%;
+  }
+}
