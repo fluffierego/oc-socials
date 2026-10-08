@@ -685,13 +685,44 @@ def create_post():
     except (TypeError, ValueError):
         return jsonify(error="Choose an OC"), 400
     c = conn()
-    oc = c.execute("SELECT id FROM ocs WHERE id=? AND owner_id=?", (oc_id, current_user()["id"])).fetchone()
+    oc = c.execute("SELECT * FROM ocs WHERE id=? AND owner_id=?", (oc_id, current_user()["id"])).fetchone()
     if not oc:
         c.close()
         return jsonify(error="You don't own that OC"), 403
+    post_text = data.get("text","").strip()
+    post_image = data.get("image","").strip()
+
     c.execute("INSERT INTO posts(oc_id,platform,text,image) VALUES(?,?,?,?)",
-              (oc_id, platform, data.get("text","").strip(), data.get("image","").strip()))
+              (oc_id, platform, post_text, post_image))
     c.commit()
+
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+    if webhook_url:
+        try:
+            embed = {
+                "title": f"{oc['name']} posted on {platform.title()}",
+                "description": post_text or "",
+                "author": {
+                    "name": f"@{oc['username']}",
+                    "icon_url": oc["avatar"] or ""
+                }
+            }
+
+            if post_image:
+                embed["image"] = {"url": post_image}
+
+            requests.post(
+                webhook_url,
+                json={
+                    "username": oc["name"],
+                    "avatar_url": oc["avatar"] or "",
+                    "embeds": [embed]
+                },
+                timeout=10
+            )
+        except Exception as e:
+            print(f"Discord webhook failed: {e}")
+
     c.close()
     return redirect(url_for(platform))
 
