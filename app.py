@@ -71,6 +71,13 @@ def init():
       image TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS discord_outbox(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      sent INTEGER DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS replies(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL,
@@ -696,33 +703,24 @@ def create_post():
               (oc_id, platform, post_text, post_image))
     c.commit()
 
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
-    if webhook_url:
-        try:
-            embed = {
-                "title": f"{oc['name']} posted on {platform.title()}",
-                "description": post_text or "",
-                "author": {
-                    "name": f"@{oc['username']}",
-                    "icon_url": oc["avatar"] or ""
-                }
-            }
+    import json
 
-            if post_image:
-                embed["image"] = {"url": post_image}
+    payload = {
+        "post_id": c.execute("SELECT last_insert_rowid()").fetchone()[0],
+        "oc_id": oc["id"],
+        "oc_name": oc["name"],
+        "username": oc["username"],
+        "avatar": oc["avatar"] or "",
+        "platform": platform,
+        "text": post_text,
+        "image": post_image
+    }
 
-            response = requests.post(
-                webhook_url,
-                json={
-                    "username": oc["name"],
-                    "avatar_url": oc["avatar"] or "",
-                    "embeds": [embed]
-                },
-                timeout=10
-            )
-            print(f"Discord webhook response: {response.status_code} {response.text[:500]}")
-        except Exception as e:
-            print(f"Discord webhook failed: {e}")
+    c.execute(
+        "INSERT INTO discord_outbox(event_type, payload) VALUES(?, ?)",
+        ("post", json.dumps(payload))
+    )
+    c.commit()
 
     c.close()
     return redirect(url_for(platform))
@@ -903,6 +901,47 @@ def tupperbox_resolve():
     if not oc:
         return jsonify(ok=False, error="No matching OC"), 404
     return jsonify(ok=True, oc=dict(oc))
+
+
+
+@app.route("/api/discord/outbox", methods=["GET"])
+def discord_outbox():
+    secret = os.environ.get("SOCIAL_BRIDGE_SECRET", "")
+    if secret and request.headers.get("X-Bridge-Secret") != secret:
+        return jsonify(error="Unauthorized"), 401
+
+    c = conn()
+    rows = c.execute(
+        "SELECT id, event_type, payload, created_at FROM discord_outbox WHERE sent=0 ORDER BY id LIMIT 25"
+    ).fetchall()
+    c.close()
+
+    return jsonify(events=[dict(row) for row in rows])
+
+
+@app.route("/api/discord/outbox/ack", methods=["POST"])
+def discord_outbox_ack():
+    secret = os.environ.get("SOCIAL_BRIDGE_SECRET", "")
+    if secret and request.headers.get("X-Bridge-Secret") != secret:
+        return jsonify(error="Unauthorized"), 401
+
+    data = request.json or {}
+    ids = data.get("ids", [])
+
+    if not isinstance(ids, list):
+        return jsonify(error="ids must be a list"), 400
+
+    c = conn()
+    for event_id in ids:
+        try:
+            event_id = int(event_id)
+        except (TypeError, ValueError):
+            continue
+        c.execute("UPDATE discord_outbox SET sent=1 WHERE id=?", (event_id,))
+    c.commit()
+    c.close()
+
+    return jsonify(ok=True)
 
 
 if __name__ == "__main__":
