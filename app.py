@@ -167,6 +167,34 @@ def discord_test():
     return f"Discord OAuth status: {r.status_code}\n\n{r.text[:500]}", r.status_code
 
 
+@app.route("/social-login")
+def social_login():
+    token = request.args.get("token", "")
+    secret = os.environ.get("SOCIAL_LOGIN_SECRET", "")
+    if not secret or not token or "." not in token:
+        return "Invalid social login link.", 400
+    try:
+        encoded, signature = token.rsplit(".", 1)
+        padding = "=" * (-len(encoded) % 4)
+        payload = base64.urlsafe_b64decode((encoded + padding).encode()).decode()
+        expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return "Invalid social login link.", 403
+        discord_id, timestamp = payload.split(":", 1)
+        if time.time() - int(timestamp) > 600:
+            return "This social login link has expired. Use !sociallogin again in Discord.", 403
+        discord_id = int(discord_id)
+    except Exception:
+        return "Invalid social login link.", 400
+    c = conn()
+    user = c.execute("SELECT * FROM users WHERE id=?", (discord_id,)).fetchone()
+    if not user:
+        c.execute("INSERT INTO users(id, discord_name, discord_avatar) VALUES(?,?,?)", (discord_id, str(discord_id), ""))
+        c.commit()
+    c.close()
+    session["user_id"] = discord_id
+    return redirect(url_for("messages"))
+
 @app.route("/login")
 def login():
     if not discord_configured():
