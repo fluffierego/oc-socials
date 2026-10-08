@@ -150,6 +150,12 @@ def home():
     return render_template("home.html", user=user, ocs=ocs)
 
 
+@app.route("/discord-test")
+def discord_test():
+    r = requests.get(f"{DISCORD_API}/users/@me", timeout=15)
+    return f"Discord status: {r.status_code}\n\n{r.text[:500]}", r.status_code
+
+
 @app.route("/login")
 def login():
     if not discord_configured():
