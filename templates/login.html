@@ -1,1 +1,21 @@
-<!doctype html><html><head><title>OC Socials Login</title><link rel="stylesheet" href="/static/style.css"></head><body><main class="card narrow"><h1>OC Socials</h1>{% if configured %}<p>Sign in with your Discord account. Your Discord account is what lets the site know which OCs belong to you.</p><a class="btn" href="/login">Continue with Discord</a>{% else %}<p class="error">Discord login isn't configured yet.</p><p>Set <code>DISCORD_CLIENT_ID</code>, <code>DISCORD_CLIENT_SECRET</code>, and <code>DISCORD_REDIRECT_URI</code> in the Terminal before starting the site.</p>{% endif %}</main></body></html>
+<!doctype html>
+<html>
+<head>
+    <title>OC Socials Login</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="card narrow">
+<h1>OC Socials</h1>
+<p>Enter the login code from the OC Socials bot on Discord.</p>
+<form action="/social-login/verify" method="POST">
+<label for="code">Login code</label>
+<input id="code" name="code" placeholder="6Character code" minlength="6" maxlength="6" autocomplete="off" required>
+<br><br>
+<button class="btn" type="submit">Log in</button>
+</form>
+<p class="error">{{ error | default('') }}</p>
+<p>You will get a code with  <code>!sociallogin</code>  in Discord.</p>
+</main>
+</body>
+</html>

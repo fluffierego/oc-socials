@@ -202,6 +202,37 @@ def social_login_create():
 
     return jsonify(ok=True)
 
+@app.route("/social-login/verify", methods=["POST"])
+def social_login_verify():
+    code = (request.form.get("code") or "").strip().upper()
+    if not code:
+        return render_template("login.html", error="Enter your login code.")
+
+    c = conn()
+    row = c.execute(
+        "SELECT discord_id FROM login_codes WHERE code=? AND expires_at>=?",
+        (code, int(time.time()))
+    ).fetchone()
+
+    if not row:
+        c.close()
+        return render_template("login.html", error="Invalid or expired login code.")
+
+    discord_id = int(row["discord_id"])
+    c.execute("DELETE FROM login_codes WHERE code=?", (code,))
+    user = c.execute("SELECT * FROM users WHERE id=?", (discord_id,)).fetchone()
+
+    if not user:
+        c.execute(
+            "INSERT INTO users(id, discord_name, discord_avatar) VALUES(?,?,?)",
+            (discord_id, str(discord_id), "")
+        )
+
+    c.commit()
+    c.close()
+    session["user_id"] = discord_id
+    return redirect(url_for("messages"))
+
 @app.route("/social-login")
 def social_login():
     token = request.args.get("token", "")
