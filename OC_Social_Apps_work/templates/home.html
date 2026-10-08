@@ -1,0 +1,5 @@
+<!doctype html><html><head><title>OC Socials</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<nav><b>OC Socials</b><span>{% if user %}<a href="/instagram">Instagram</a><a href="/twitter">Twitter/X</a><a href="/messages">iMessage</a><a href="/oc/new">+ OC</a><a href="/logout">Log out</a>{% endif %}</span></nav>
+<main>{% if not user %}<section class="hero"><h1>OC Socials</h1><p>Instagram, Twitter/X and iMessage for your RP characters.</p><a class="btn" href="/login">Continue with Discord</a></section>{% else %}
+<section class="card"><h1>Welcome, {{user['discord_name']}} 👋</h1><p>Your Discord account controls your OCs.</p><div class="actions"><a class="btn" href="/oc/new">Create an OC</a><a class="btn secondary" href="/chat/new">Create group chat</a></div></section>
+<h2>Your OCs</h2><div class="oc-grid">{% for oc in ocs %}<a class="oc-card" href="/oc/{{oc['id']}}"><img src="{{oc['avatar']}}"><b>{{oc['name']}}</b><small>@{{oc['username']}}</small></a>{% else %}<p>You haven't created an OC yet.</p>{% endfor %}</div>{% endif %}</main></body></html>
