@@ -711,7 +711,7 @@ def create_post():
             if post_image:
                 embed["image"] = {"url": post_image}
 
-            requests.post(
+            response = requests.post(
                 webhook_url,
                 json={
                     "username": oc["name"],
@@ -720,6 +720,7 @@ def create_post():
                 },
                 timeout=10
             )
+            print(f"Discord webhook response: {response.status_code} {response.text[:500]}")
         except Exception as e:
             print(f"Discord webhook failed: {e}")
 
