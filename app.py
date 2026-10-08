@@ -168,6 +168,40 @@ def discord_test():
     return f"Discord OAuth status: {r.status_code}\n\n{r.text[:500]}", r.status_code
 
 
+@app.route("/social-login/create", methods=["POST"])
+def social_login_create():
+    secret = os.environ.get("SOCIAL_LOGIN_SECRET", "")
+    if not secret or request.headers.get("X-Social-Secret") != secret:
+        return jsonify(error="Unauthorized"), 401
+
+    data = request.json or {}
+    discord_id = data.get("discord_id")
+    code = str(data.get("code") or "").strip().upper()
+
+    if not discord_id or not code:
+        return jsonify(error="Missing discord_id or code"), 400
+
+    try:
+        discord_id = int(discord_id)
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid discord_id"), 400
+
+    c = conn()
+    c.execute("""CREATE TABLE IF NOT EXISTS login_codes (
+        code TEXT PRIMARY KEY,
+        discord_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    )""")
+    c.execute("DELETE FROM login_codes WHERE expires_at < ?", (int(time.time()),))
+    c.execute(
+        "INSERT OR REPLACE INTO login_codes(code, discord_id, expires_at) VALUES(?,?,?)",
+        (code, discord_id, int(time.time()) + 600)
+    )
+    c.commit()
+    c.close()
+
+    return jsonify(ok=True)
+
 @app.route("/social-login")
 def social_login():
     token = request.args.get("token", "")
