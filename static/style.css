@@ -192,3 +192,58 @@
   font-size: .92rem;
   font-weight: 600;
 }
+
+
+/* Compact Instagram-style comments */
+.ig-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 0;
+  border-top: none;
+  color: #262626;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ig-comment .ig-comment-avatar {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ig-comment-content {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ig-comment-line b {
+  margin-right: 4px;
+  font-weight: 600;
+}
+
+.ig-comment-line span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ig-comment-meta {
+  display: block;
+  margin-top: 4px;
+  color: #8e8e8e;
+  font-size: 11px;
+}
+
+.ig-comment-heart {
+  border: 0;
+  background: transparent;
+  color: #8e8e8e;
+  padding: 0 3px;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
