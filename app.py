@@ -1,4 +1,7 @@
 import os
+import io
+import tempfile
+import zipfile
 import uuid, sqlite3, secrets, urllib.parse, uuid
 import base64, hashlib, hmac, time
 
@@ -14,7 +17,7 @@ if os.path.exists(_ENV_FILE):
             os.environ.setdefault(_key.strip(), _value.strip().strip("\"").strip("'"))
 from functools import wraps
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 
 try:
     import requests
@@ -1020,6 +1023,70 @@ def discord_outbox_ack():
     c.close()
 
     return jsonify(ok=True)
+
+
+
+@app.route("/admin/export-live-backup", methods=["GET"])
+def export_live_backup():
+    token = os.environ.get("MIGRATION_EXPORT_TOKEN", "")
+    if not token:
+        return jsonify(error="Export is not enabled"), 404
+
+    supplied = request.headers.get("Authorization", "")
+    if not hmac.compare_digest(supplied, "Bearer " + token):
+        return jsonify(error="Unauthorized"), 401
+
+    if not os.path.isfile(DB):
+        return jsonify(error="Database file not found"), 404
+
+    archive_buffer = io.BytesIO()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        snapshot_path = os.path.join(temp_dir, "social_apps.db")
+
+        source = sqlite3.connect(DB)
+        try:
+            destination = sqlite3.connect(snapshot_path)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+        finally:
+            source.close()
+
+        upload_root = os.path.join(app.root_path, "static", "uploads")
+        upload_count = 0
+
+        with zipfile.ZipFile(
+            archive_buffer, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            archive.write(snapshot_path, "social_apps.db")
+
+            if os.path.isdir(upload_root):
+                for root, _, files in os.walk(upload_root):
+                    for filename in files:
+                        full_path = os.path.join(root, filename)
+                        relative_path = os.path.relpath(full_path, app.root_path)
+                        archive.write(full_path, relative_path)
+                        upload_count += 1
+
+            archive.writestr(
+                "backup_info.txt",
+                "Live SQLite database snapshot\n"
+                f"Created UTC: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Uploaded files included: {upload_count}\n"
+            )
+
+    archive_buffer.seek(0)
+    response = send_file(
+        archive_buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="oc-socials-live-backup.zip",
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 if __name__ == "__main__":
