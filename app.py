@@ -34,13 +34,158 @@ DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "http://127.0.0.1:
 DISCORD_API = "https://discord.com/api/v10"
 
 
+# SUPABASE_POSTGRES_COMPAT_LAYER
+# Use PostgreSQL only when DATABASE_URL is configured; local development stays on SQLite.
+import re
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USE_POSTGRES = bool(DATABASE_URL)
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
+if USE_POSTGRES and psycopg is None:
+    raise RuntimeError("DATABASE_URL is set but psycopg is not installed. Install requirements.txt.")
+
+DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+if USE_POSTGRES:
+    DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg.IntegrityError)
+
+class _CompatRow(dict):
+    """Dict row that also supports SQLite-style numeric indexing."""
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+class _CompatCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return None if row is None else _CompatRow(row)
+    def fetchall(self):
+        return [_CompatRow(row) for row in self._cursor.fetchall()]
+    def fetchmany(self, size=None):
+        rows = self._cursor.fetchmany() if size is None else self._cursor.fetchmany(size)
+        return [_CompatRow(row) for row in rows]
+    def __iter__(self):
+        for row in self._cursor:
+            yield _CompatRow(row)
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+def _postgres_sql(sql):
+    text = sql.strip()
+    if re.fullmatch(r"SELECT\s+last_insert_rowid\(\)", text, flags=re.I):
+        return "SELECT LASTVAL()"
+
+    if re.match(r"INSERT\s+OR\s+REPLACE\s+INTO\s+login_codes\b", text, flags=re.I):
+        text = re.sub(r"^INSERT\s+OR\s+REPLACE\s+INTO", "INSERT INTO", text, count=1, flags=re.I)
+        text = text.rstrip().rstrip(";")
+        text += " ON CONFLICT (code) DO UPDATE SET discord_id=EXCLUDED.discord_id, expires_at=EXCLUDED.expires_at"
+        return text.replace("?", "%s")
+
+    ignore = bool(re.match(r"INSERT\s+OR\s+IGNORE\s+INTO\b", text, flags=re.I))
+    if ignore:
+        text = re.sub(r"^INSERT\s+OR\s+IGNORE\s+INTO", "INSERT INTO", text, count=1, flags=re.I)
+    text = text.replace("?", "%s")
+    if ignore:
+        text = text.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    return text
+
+class _PostgresCompatConnection:
+    def __init__(self, raw):
+        self._raw = raw
+    def execute(self, sql, params=None):
+        cur = self._raw.cursor()
+        translated = _postgres_sql(sql)
+        if params is None:
+            cur.execute(translated)
+        else:
+            cur.execute(translated, params)
+        return _CompatCursor(cur)
+    def executemany(self, sql, seq_of_params):
+        cur = self._raw.cursor()
+        cur.executemany(_postgres_sql(sql), seq_of_params)
+        return _CompatCursor(cur)
+    def commit(self):
+        return self._raw.commit()
+    def rollback(self):
+        return self._raw.rollback()
+    def close(self):
+        return self._raw.close()
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
+
 def conn():
+    if USE_POSTGRES:
+        raw = psycopg.connect(
+            DATABASE_URL,
+            row_factory=dict_row,
+            connect_timeout=15,
+            application_name="oc-socials",
+        )
+        return _PostgresCompatConnection(raw)
     c = sqlite3.connect(DB)
     c.row_factory = sqlite3.Row
     return c
 
 
+
+def store_post_photo(uploaded, filename):
+    """Store uploaded post images in Supabase Storage in production PostgreSQL mode."""
+    if not USE_POSTGRES:
+        upload_dir = os.path.join(app.root_path, "static", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        uploaded.save(os.path.join(upload_dir, filename))
+        return request.host_url.rstrip("/") + url_for("static", filename=f"uploads/{filename}")
+
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not supabase_url or not service_key:
+        raise RuntimeError("Photo storage is not configured on the server (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).")
+    if requests is None:
+        raise RuntimeError("The requests package is required for Supabase Storage uploads.")
+
+    content_type = uploaded.mimetype or "application/octet-stream"
+    response = requests.post(
+        f"{supabase_url}/storage/v1/object/oc-socials-uploads/{filename}",
+        headers={
+            "Authorization": f"Bearer {service_key}",
+            "apikey": service_key,
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        },
+        data=uploaded.read(),
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(f"Supabase Storage upload failed (HTTP {response.status_code}).")
+    return f"{supabase_url}/storage/v1/object/public/oc-socials-uploads/{filename}"
+
 def init():
+    if USE_POSTGRES:
+        c = conn()
+        required = {
+            "users", "ocs", "posts", "login_codes", "discord_outbox",
+            "post_likes", "replies", "chats", "chat_members", "chat_users", "messages",
+        }
+        existing = {
+            row["table_name"] for row in c.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
+            ).fetchall()
+        }
+        c.close()
+        missing = sorted(required - existing)
+        if missing:
+            raise RuntimeError(
+                "Supabase database is missing tables: " + ", ".join(missing)
+                + ". Do not set DATABASE_URL on Render until the Supabase schema is complete."
+            )
+        return
     c = conn()
     c.execute("CREATE TABLE IF NOT EXISTS login_codes (code TEXT PRIMARY KEY, discord_id INTEGER NOT NULL, expires_at INTEGER NOT NULL)")
     c.execute("""CREATE TABLE IF NOT EXISTS login_codes (
@@ -653,7 +798,7 @@ def new_oc():
                  request.form.get("avatar", "").strip(), request.form.get("banner", "").strip()),
             )
             c.commit()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             c.close()
             return render_template("oc_new.html", user=user, error="You already have an OC with that username.")
         c.close()
@@ -680,7 +825,7 @@ def edit_oc(oc_id):
                   request.form.get("avatar","").strip(), request.form.get("banner","").strip(),
                   oc_id, user["id"]))
             c.commit()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             c.close()
             return render_template("oc_edit.html", oc=oc, user=user, error="That username is already used by another one of your OCs.")
         c.close()
@@ -730,14 +875,12 @@ def create_post():
             return jsonify(error="Please upload a JPG, PNG, WEBP, or GIF image."), 400
 
         filename = f"{uuid.uuid4().hex}{ext}"
-        upload_dir = os.path.join(app.root_path, "static", "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-
-        uploaded.save(os.path.join(upload_dir, filename))
-        post_image = request.host_url.rstrip("/") + url_for(
-            "static",
-            filename=f"uploads/{filename}"
-        )
+        try:
+            post_image = store_post_photo(uploaded, filename)
+        except Exception as exc:
+            c.close()
+            print(f"Post image upload failed: {exc}")
+            return jsonify(error="Could not store the uploaded photo. Check the server's Supabase Storage configuration."), 502
 
     c.execute("INSERT INTO posts(oc_id,platform,text,image) VALUES(?,?,?,?)",
               (oc_id, platform, post_text, post_image))
@@ -1028,6 +1171,8 @@ def discord_outbox_ack():
 
 @app.route("/admin/export-live-backup", methods=["GET"])
 def export_live_backup():
+    if USE_POSTGRES:
+        return jsonify(error="SQLite export is disabled because the app now uses PostgreSQL."), 409
     token = os.environ.get("MIGRATION_EXPORT_TOKEN", "")
     if not token:
         return jsonify(error="Export is not enabled"), 404
