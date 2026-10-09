@@ -28,3 +28,43 @@ if(mf){
     else alert((await res.json()).error || "Could not send message.");
   });
 }
+
+
+// OC Socials saved-like button handler
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".like-button");
+  if (!button || button.disabled) return;
+
+  const postId = button.dataset.post;
+  button.disabled = true;
+
+  try {
+    const response = await fetch("/api/like", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({post_id: postId})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not like post.");
+
+    document.querySelectorAll(
+      '.like-button[data-post="' + postId + '"]'
+    ).forEach((b) => {
+      b.classList.toggle("liked", data.liked);
+      const heart = b.querySelector(".like-heart");
+      const label = b.querySelector(".like-label");
+      if (heart) heart.textContent = data.liked ? "♥" : "♡";
+      if (label) label.textContent = data.liked ? "Liked" : "Like";
+    });
+
+    document.querySelectorAll(
+      '[data-like-count="' + postId + '"]'
+    ).forEach((el) => {
+      el.textContent = data.count + (data.count === 1 ? " like" : " likes");
+    });
+  } catch (error) {
+    alert(error.message || "Could not like post.");
+  } finally {
+    button.disabled = false;
+  }
+});

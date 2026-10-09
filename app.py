@@ -80,6 +80,12 @@ def init():
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       sent INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS post_likes(
+        post_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS replies(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL,
@@ -361,10 +367,15 @@ def logout():
 def instagram():
     c = conn()
     posts = c.execute("""
-      SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id
-      FROM posts p JOIN ocs o ON o.id=p.oc_id
-      WHERE p.platform='instagram' ORDER BY p.id DESC
-    """).fetchall()
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+               (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS like_count,
+               EXISTS(
+                   SELECT 1 FROM post_likes l
+                   WHERE l.post_id=p.id AND l.user_id=?
+               ) AS liked_by_me
+        FROM posts p JOIN ocs o ON o.id=p.oc_id
+        WHERE p.platform='instagram' ORDER BY p.id DESC
+    """, (current_user()["id"],)).fetchall()
     replies = c.execute("""
       SELECT r.*, o.name, o.username, o.avatar
       FROM replies r JOIN ocs o ON o.id=r.oc_id
@@ -379,10 +390,15 @@ def instagram():
 def twitter():
     c = conn()
     posts = c.execute("""
-      SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id
-      FROM posts p JOIN ocs o ON o.id=p.oc_id
-      WHERE p.platform='twitter' ORDER BY p.id DESC
-    """).fetchall()
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+               (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS like_count,
+               EXISTS(
+                   SELECT 1 FROM post_likes l
+                   WHERE l.post_id=p.id AND l.user_id=?
+               ) AS liked_by_me
+        FROM posts p JOIN ocs o ON o.id=p.oc_id
+        WHERE p.platform='twitter' ORDER BY p.id DESC
+    """, (current_user()["id"],)).fetchall()
     replies = c.execute("""
       SELECT r.*, o.name, o.username, o.avatar
       FROM replies r JOIN ocs o ON o.id=r.oc_id
@@ -745,6 +761,47 @@ def create_post():
 
     c.close()
     return redirect(url_for(platform))
+
+
+@app.route("/api/like", methods=["POST"])
+@login_required
+def api_like():
+    data = request.get_json(silent=True) or request.form
+    try:
+        post_id = int(data.get("post_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid post ID"), 400
+
+    user_id = current_user()["id"]
+    c = conn()
+    if not c.execute("SELECT id FROM posts WHERE id=?", (post_id,)).fetchone():
+        c.close()
+        return jsonify(error="Post not found"), 404
+
+    existing = c.execute(
+        "SELECT 1 FROM post_likes WHERE post_id=? AND user_id=?",
+        (post_id, user_id)
+    ).fetchone()
+
+    if existing:
+        c.execute(
+            "DELETE FROM post_likes WHERE post_id=? AND user_id=?",
+            (post_id, user_id)
+        )
+        liked = False
+    else:
+        c.execute(
+            "INSERT OR IGNORE INTO post_likes(post_id, user_id) VALUES(?, ?)",
+            (post_id, user_id)
+        )
+        liked = True
+
+    c.commit()
+    count = c.execute(
+        "SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)
+    ).fetchone()[0]
+    c.close()
+    return jsonify(ok=True, liked=liked, count=count)
 
 
 @app.route("/api/reply", methods=["POST"])

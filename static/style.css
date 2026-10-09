@@ -160,3 +160,35 @@
     max-width:82%;
   }
 }
+
+
+/* OC Socials saved likes */
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.like-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.like-button .like-heart {
+  font-size: 1.4em;
+  line-height: 1;
+}
+.like-button.liked .like-heart {
+  color: #ed4956;
+}
+.like-count {
+  font-size: .92rem;
+  font-weight: 600;
+}
