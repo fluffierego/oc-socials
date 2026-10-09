@@ -171,7 +171,7 @@ def init():
         c = conn()
         required = {
             "users", "ocs", "posts", "login_codes", "discord_outbox",
-            "post_likes", "replies", "chats", "chat_members", "chat_users", "messages",
+            "post_likes", "reply_likes", "replies", "chats", "chat_members", "chat_users", "messages",
         }
         existing = {
             row["table_name"] for row in c.execute(
@@ -233,6 +233,12 @@ def init():
         user_id INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(post_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS reply_likes(
+        reply_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(reply_id, user_id)
     );
     CREATE TABLE IF NOT EXISTS replies(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -529,10 +535,15 @@ def instagram():
         WHERE p.platform='instagram' ORDER BY p.id DESC
     """, (current_user()["id"],)).fetchall()
     replies = c.execute("""
-      SELECT r.*, o.name, o.username, o.avatar
+      SELECT r.*, o.name, o.username, o.avatar,
+             (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
+             EXISTS(
+                 SELECT 1 FROM reply_likes rl
+                 WHERE rl.reply_id=r.id AND rl.user_id=?
+             ) AS reply_liked_by_me
       FROM replies r JOIN ocs o ON o.id=r.oc_id
       ORDER BY r.id
-    """).fetchall()
+    """, (current_user()["id"],)).fetchall()
     c.close()
     return render_template("instagram.html", posts=posts, replies=replies, user=current_user())
 
@@ -552,10 +563,15 @@ def twitter():
         WHERE p.platform='twitter' ORDER BY p.id DESC
     """, (current_user()["id"],)).fetchall()
     replies = c.execute("""
-      SELECT r.*, o.name, o.username, o.avatar
+      SELECT r.*, o.name, o.username, o.avatar,
+             (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
+             EXISTS(
+                 SELECT 1 FROM reply_likes rl
+                 WHERE rl.reply_id=r.id AND rl.user_id=?
+             ) AS reply_liked_by_me
       FROM replies r JOIN ocs o ON o.id=r.oc_id
       ORDER BY r.id
-    """).fetchall()
+    """, (current_user()["id"],)).fetchall()
     c.close()
     return render_template("twitter.html", posts=posts, replies=replies, user=current_user())
 
@@ -949,6 +965,46 @@ def api_like():
     c.commit()
     count = c.execute(
         "SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)
+    ).fetchone()[0]
+    c.close()
+    return jsonify(ok=True, liked=liked, count=count)
+
+
+@app.route("/api/reply-like", methods=["POST"])
+@login_required
+def api_reply_like():
+    data = request.get_json(silent=True) or request.form
+    try:
+        reply_id = int(data.get("reply_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid comment ID"), 400
+
+    user_id = current_user()["id"]
+    c = conn()
+    if not c.execute("SELECT id FROM replies WHERE id=?", (reply_id,)).fetchone():
+        c.close()
+        return jsonify(error="Comment not found"), 404
+
+    existing = c.execute(
+        "SELECT 1 FROM reply_likes WHERE reply_id=? AND user_id=?",
+        (reply_id, user_id)
+    ).fetchone()
+    if existing:
+        c.execute(
+            "DELETE FROM reply_likes WHERE reply_id=? AND user_id=?",
+            (reply_id, user_id)
+        )
+        liked = False
+    else:
+        c.execute(
+            "INSERT OR IGNORE INTO reply_likes(reply_id, user_id) VALUES(?, ?)",
+            (reply_id, user_id)
+        )
+        liked = True
+
+    c.commit()
+    count = c.execute(
+        "SELECT COUNT(*) FROM reply_likes WHERE reply_id=?", (reply_id,)
     ).fetchone()[0]
     c.close()
     return jsonify(ok=True, liked=liked, count=count)

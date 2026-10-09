@@ -86,3 +86,70 @@ document.addEventListener("click", (event) => {
   textField.focus();
   form.scrollIntoView({behavior: "smooth", block: "nearest"});
 });
+
+
+// OC Socials: saved comment likes
+ document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".reply-like-button");
+  if (!button || button.disabled) return;
+  const replyId = button.dataset.replyId;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/reply-like", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reply_id: replyId})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not like comment.");
+    document.querySelectorAll('.reply-like-button[data-reply-id="' + replyId + '"]').forEach((item) => {
+      item.classList.toggle("liked", data.liked);
+      item.setAttribute("aria-pressed", data.liked ? "true" : "false");
+      const heart = item.querySelector(".reply-heart");
+      const count = item.querySelector(".reply-like-count");
+      if (heart) heart.textContent = data.liked ? "♥" : "♡";
+      if (count) count.textContent = data.count ? String(data.count) : "";
+    });
+  } catch (error) {
+    alert(error.message || "Could not like comment.");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+// OC Socials: Share copies a direct link to the post's anchor.
+async function ocSocialsCopyText(value) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  if (!copied) throw new Error("Clipboard access was blocked by the browser.");
+}
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".share-post-button");
+  if (!button || button.disabled) return;
+  const link = new URL(window.location.href);
+  link.hash = "post-" + button.dataset.post;
+  const originalText = button.dataset.originalText || button.textContent;
+  button.dataset.originalText = originalText;
+  button.disabled = true;
+  try {
+    await ocSocialsCopyText(link.href);
+    button.textContent = "✓ Link copied";
+    button.setAttribute("aria-label", "Post link copied");
+  } catch (error) {
+    alert("Couldn't copy the post link automatically. You can copy this link:\n" + link.href);
+  } finally {
+    button.disabled = false;
+  }
+});

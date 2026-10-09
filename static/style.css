@@ -262,3 +262,39 @@
 .comment-reply-trigger:hover { text-decoration: underline; }
 .ig-comment-child { margin: 7px 0 0 20px; padding: 4px 0 0; }
 .ig-comment-child .ig-comment-avatar { width: 24px; height: 24px; min-width: 24px; }
+
+
+/* Functional share and comment likes */
+.share-post-button {
+  background: transparent !important;
+  color: inherit !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  font: inherit;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.share-post-button:hover { opacity: .7; }
+.ig-comment-heart.reply-like-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent !important;
+  color: #8e8e8e;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 3px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.reply-like-button .reply-heart { color: #8e8e8e; }
+.reply-like-button.liked .reply-heart { color: #ed4956; }
+.reply-like-count:not(:empty) { font-size: 10px; }
+.reply-like-count:empty { display: none; }
+.reply-like-button:disabled, .share-post-button:disabled { opacity: .65; cursor: wait; }
