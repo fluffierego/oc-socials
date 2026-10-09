@@ -239,7 +239,8 @@ def init():
       post_id INTEGER NOT NULL,
       oc_id INTEGER NOT NULL,
       text TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      parent_id INTEGER
     );
     CREATE TABLE IF NOT EXISTS chats(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,6 +269,9 @@ def init():
     """)
     # Small migrations so an older copy of this project keeps working.
     columns = {row["name"] for row in c.execute("PRAGMA table_info(users)").fetchall()}
+    reply_columns = {row["name"] for row in c.execute("PRAGMA table_info(replies)").fetchall()}
+    if "parent_id" not in reply_columns:
+        c.execute("ALTER TABLE replies ADD COLUMN parent_id INTEGER")
     if "discord_avatar" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN discord_avatar TEXT DEFAULT ''")
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
@@ -953,23 +957,49 @@ def api_like():
 @app.route("/api/reply", methods=["POST"])
 @login_required
 def reply():
-    data = request.json or request.form
+    data = request.get_json(silent=True) or request.form
     try:
         oc_id = int(data["oc_id"])
         post_id = int(data["post_id"])
     except (KeyError, TypeError, ValueError):
         return jsonify(error="Missing OC or post"), 400
+
+    raw_parent_id = data.get("parent_id")
+    try:
+        parent_id = int(raw_parent_id) if raw_parent_id not in (None, "") else None
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid comment reply"), 400
+
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify(error="Write a reply first"), 400
+
     c = conn()
-    oc = c.execute("SELECT * FROM ocs WHERE id=? AND owner_id=?", (oc_id, current_user()["id"])).fetchone()
+    oc = c.execute(
+        "SELECT * FROM ocs WHERE id=? AND owner_id=?",
+        (oc_id, current_user()["id"])
+    ).fetchone()
     if not oc:
         c.close()
         return jsonify(error="You don't own that OC"), 403
+
     post = c.execute("SELECT id FROM posts WHERE id=?", (post_id,)).fetchone()
     if not post:
         c.close()
         return jsonify(error="Post not found"), 404
-    c.execute("INSERT INTO replies(post_id,oc_id,text) VALUES(?,?,?)",
-              (post_id, oc_id, data.get("text","").strip()))
+
+    if parent_id is not None:
+        parent = c.execute(
+            "SELECT id, post_id FROM replies WHERE id=?", (parent_id,)
+        ).fetchone()
+        if not parent or int(parent["post_id"]) != post_id:
+            c.close()
+            return jsonify(error="That comment does not belong to this post"), 400
+
+    c.execute(
+        "INSERT INTO replies(post_id,oc_id,text,parent_id) VALUES(?,?,?,?)",
+        (post_id, oc_id, text, parent_id)
+    )
     c.commit()
     c.close()
     return jsonify(ok=True)

@@ -5,7 +5,7 @@ document.querySelectorAll(".reply-form").forEach(form => {
     const res = await fetch("/api/reply", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({post_id:form.dataset.post, oc_id:fd.get("oc_id"), text:fd.get("text")})
+      body:JSON.stringify({post_id:form.dataset.post, oc_id:fd.get("oc_id"), text:fd.get("text"), parent_id:fd.get("parent_id") || null})
     });
     if(res.ok) location.reload();
     else alert((await res.json()).error || "Could not reply.");
@@ -67,4 +67,22 @@ document.addEventListener("click", async (event) => {
   } finally {
     button.disabled = false;
   }
+});
+
+
+// OC Socials: choose which comment a reply should respond to.
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest(".comment-reply-trigger");
+  if (!trigger) return;
+  const post = trigger.closest(".post, .tweet");
+  if (!post) return;
+  const form = post.querySelector(".reply-form");
+  if (!form) return;
+  const parentField = form.querySelector('[name="parent_id"]');
+  const textField = form.querySelector('input[name="text"]');
+  if (!parentField || !textField) return;
+  parentField.value = trigger.dataset.parentId || "";
+  textField.placeholder = "Reply to @" + (trigger.dataset.username || "user") + "...";
+  textField.focus();
+  form.scrollIntoView({behavior: "smooth", block: "nearest"});
 });

@@ -247,3 +247,18 @@
   line-height: 1;
   cursor: pointer;
 }
+
+
+/* Clickable threaded comment replies */
+.comment-reply-trigger {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: #8e8e8e;
+  font: inherit;
+  cursor: pointer;
+}
+.comment-reply-trigger:hover { text-decoration: underline; }
+.ig-comment-child { margin: 7px 0 0 20px; padding: 4px 0 0; }
+.ig-comment-child .ig-comment-avatar { width: 24px; height: 24px; min-width: 24px; }
