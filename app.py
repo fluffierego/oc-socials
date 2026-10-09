@@ -1,4 +1,5 @@
-import os, sqlite3, secrets, urllib.parse
+import os
+import uuid, sqlite3, secrets, urllib.parse, uuid
 import base64, hashlib, hmac, time
 
 # Load a local .env file without requiring another package.
@@ -12,6 +13,7 @@ if os.path.exists(_ENV_FILE):
             _key, _value = _line.split("=", 1)
             os.environ.setdefault(_key.strip(), _value.strip().strip("\"").strip("'"))
 from functools import wraps
+from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 
 try:
@@ -698,6 +700,25 @@ def create_post():
         return jsonify(error="You don't own that OC"), 403
     post_text = data.get("text","").strip()
     post_image = data.get("image","").strip()
+
+    uploaded = request.files.get("image_file")
+    if uploaded and uploaded.filename:
+        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+        ext = os.path.splitext(uploaded.filename)[1].lower()
+
+        if ext not in allowed:
+            c.close()
+            return jsonify(error="Please upload a JPG, PNG, WEBP, or GIF image."), 400
+
+        filename = f"{uuid.uuid4().hex}{ext}"
+        upload_dir = os.path.join(app.root_path, "static", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        uploaded.save(os.path.join(upload_dir, filename))
+        post_image = request.host_url.rstrip("/") + url_for(
+            "static",
+            filename=f"uploads/{filename}"
+        )
 
     c.execute("INSERT INTO posts(oc_id,platform,text,image) VALUES(?,?,?,?)",
               (oc_id, platform, post_text, post_image))
