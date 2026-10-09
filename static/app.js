@@ -153,3 +153,33 @@ document.addEventListener("click", async (event) => {
     button.disabled = false;
   }
 });
+
+
+// OC Socials: saved retweets for Twitter/X
+ document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".retweet-button");
+  if (!button || button.disabled) return;
+  const postId = button.dataset.postId;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/retweet", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({post_id: postId})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not retweet this post.");
+    document.querySelectorAll('.retweet-button[data-post-id="' + postId + '"]').forEach((item) => {
+      item.classList.toggle("retweeted", data.retweeted);
+      item.setAttribute("aria-pressed", data.retweeted ? "true" : "false");
+      const label = item.querySelector(".retweet-label");
+      const count = item.querySelector(".retweet-count");
+      if (label) label.textContent = data.retweeted ? "Retweeted" : "Retweet";
+      if (count) count.textContent = String(data.count);
+    });
+  } catch (error) {
+    alert(error.message || "Could not retweet this post.");
+  } finally {
+    button.disabled = false;
+  }
+});

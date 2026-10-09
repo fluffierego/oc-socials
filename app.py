@@ -171,7 +171,7 @@ def init():
         c = conn()
         required = {
             "users", "ocs", "posts", "login_codes", "discord_outbox",
-            "post_likes", "reply_likes", "replies", "chats", "chat_members", "chat_users", "messages",
+            "post_likes", "retweets", "reply_likes", "replies", "chats", "chat_members", "chat_users", "messages",
         }
         existing = {
             row["table_name"] for row in c.execute(
@@ -229,6 +229,12 @@ def init():
       sent INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS post_likes(
+        post_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS retweets(
         post_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -558,10 +564,15 @@ def twitter():
                EXISTS(
                    SELECT 1 FROM post_likes l
                    WHERE l.post_id=p.id AND l.user_id=?
-               ) AS liked_by_me
+               ) AS liked_by_me,
+                (SELECT COUNT(*) FROM retweets rt WHERE rt.post_id=p.id) AS retweet_count,
+                EXISTS(
+                    SELECT 1 FROM retweets rt
+                    WHERE rt.post_id=p.id AND rt.user_id=?
+                ) AS retweeted_by_me
         FROM posts p JOIN ocs o ON o.id=p.oc_id
         WHERE p.platform='twitter' ORDER BY p.id DESC
-    """, (current_user()["id"],)).fetchall()
+    """, (current_user()["id"], current_user()["id"])).fetchall()
     replies = c.execute("""
       SELECT r.*, o.name, o.username, o.avatar,
              (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
@@ -927,6 +938,49 @@ def create_post():
 
     c.close()
     return redirect(url_for(platform))
+
+
+@app.route("/api/retweet", methods=["POST"])
+@login_required
+def api_retweet():
+    data = request.get_json(silent=True) or request.form
+    try:
+        post_id = int(data.get("post_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid post ID"), 400
+
+    user_id = current_user()["id"]
+    c = conn()
+    post = c.execute(
+        "SELECT id FROM posts WHERE id=? AND platform='twitter'", (post_id,)
+    ).fetchone()
+    if not post:
+        c.close()
+        return jsonify(error="Twitter/X post not found"), 404
+
+    existing = c.execute(
+        "SELECT 1 FROM retweets WHERE post_id=? AND user_id=?",
+        (post_id, user_id)
+    ).fetchone()
+    if existing:
+        c.execute(
+            "DELETE FROM retweets WHERE post_id=? AND user_id=?",
+            (post_id, user_id)
+        )
+        retweeted = False
+    else:
+        c.execute(
+            "INSERT OR IGNORE INTO retweets(post_id, user_id) VALUES(?, ?)",
+            (post_id, user_id)
+        )
+        retweeted = True
+
+    c.commit()
+    count = c.execute(
+        "SELECT COUNT(*) FROM retweets WHERE post_id=?", (post_id,)
+    ).fetchone()[0]
+    c.close()
+    return jsonify(ok=True, retweeted=retweeted, count=count)
 
 
 @app.route("/api/like", methods=["POST"])

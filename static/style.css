@@ -298,3 +298,25 @@
 .reply-like-count:not(:empty) { font-size: 10px; }
 .reply-like-count:empty { display: none; }
 .reply-like-button:disabled, .share-post-button:disabled { opacity: .65; cursor: wait; }
+
+
+/* Twitter/X retweet controls */
+.retweet-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 12px 0 0;
+  background: transparent !important;
+  color: #71767b;
+  font: inherit;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.retweet-button:hover { color: #00a878; }
+.retweet-button.retweeted { color: #00a878; }
+.retweet-button .retweet-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+.retweet-button .retweet-count { font-size: .92em; }
+.retweet-button:disabled { opacity: .65; cursor: wait; }
