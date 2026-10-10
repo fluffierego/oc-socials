@@ -19,21 +19,26 @@
       <div class="ig-profile-details">
         <div class="ig-profile-title-row">
           <h1>{{oc['username']}}</h1>
-          {% if user['id'] == oc['owner_id'] %}
-          <a class="ig-profile-edit" href="{{ url_for('edit_oc', oc_id=oc['id']) }}">Edit profile</a>
-          {% else %}
           {% set owned_ocs = user_ocs(user['id']) %}
-          {% if owned_ocs %}
-          <form class="ig-follow-controls" data-followed-oc="{{oc['id']}}">
-            <label class="ig-follow-label" for="follow-as-{{oc['id']}}">Follow as</label>
-            <select class="ig-follow-as" id="follow-as-{{oc['id']}}" name="follower_oc_id">
-              {% for own_oc in owned_ocs %}<option value="{{own_oc['id']}}" data-following="{{ '1' if oc_is_following(own_oc['id'], oc['id']) else '0' }}">@{{own_oc['username']}}</option>{% endfor %}
-            </select>
-            <button class="ig-follow-button" type="submit" data-followed-oc="{{oc['id']}}">Follow</button>
-          </form>
-          {% endif %}
-          {% endif %}
-          <span class="ig-profile-menu" aria-hidden="true">•••</span>
+{% if user['id'] == oc['owner_id'] %}
+<a class="ig-profile-edit" href="{{ url_for('edit_oc', oc_id=oc['id']) }}">Edit profile</a>
+{% endif %}
+{% set follow_state = namespace(can_follow=false) %}
+{% for own_oc in owned_ocs %}
+{% if own_oc['id'] != oc['id'] %}
+{% set follow_state.can_follow = true %}
+{% endif %}
+{% endfor %}
+{% if follow_state.can_follow %}
+<form class="ig-follow-controls" data-followed-oc="{{oc['id']}}">
+<label class="ig-follow-label" for="follow-as-{{oc['id']}}">Follow as</label>
+<select class="ig-follow-as" id="follow-as-{{oc['id']}}" name="follower_oc_id">
+{% for own_oc in owned_ocs if own_oc['id'] != oc['id'] %}<option value="{{own_oc['id']}}" data-following="{{ '1' if oc_is_following(own_oc['id'], oc['id']) else '0' }}">{{own_oc['username']}}</option>{% endfor %}
+</select>
+<button class="ig-follow-button" type="submit" data-followed-oc="{{oc['id']}}">Follow</button>
+</form>
+{% endif %}
+<span class="ig-profile-menu" aria-hidden="true">•••</span>
         </div>
         <div class="ig-profile-stats">
           <span><strong>{{posts|length}}</strong> posts</span>
