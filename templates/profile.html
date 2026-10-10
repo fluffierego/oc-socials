@@ -80,7 +80,17 @@
       select.addEventListener("change", refreshLabel);
       refreshLabel();
 
-      form.addEventListener("submit", async (event) => {
+        const updateFollowButton = () => {
+    const selectedOption = select.options[select.selectedIndex];
+    const isFollowing = selectedOption?.dataset.following === "1";
+    button.textContent = isFollowing ? "Following" : "Follow";
+    button.classList.toggle("is-following", isFollowing);
+    button.setAttribute("aria-pressed", isFollowing ? "true" : "false");
+  };
+  select.addEventListener("change", updateFollowButton);
+  updateFollowButton();
+
+  form.addEventListener("submit", async (event) => {
         event.preventDefault();
         button.disabled = true;
         try {
@@ -92,6 +102,7 @@
           const result = await response.json();
           if (!response.ok || !result.ok) throw new Error(result.error || "Could not update follow");
           select.options[select.selectedIndex].dataset.following = result.following ? "1" : "0";
+    updateFollowButton();
           const followersNode = document.querySelector(".ig-followers-count");
           const followingNode = document.querySelector(".ig-following-count");
           if (followersNode) followersNode.textContent = result.followers;
