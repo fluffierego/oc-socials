@@ -42,7 +42,7 @@ document.addEventListener("click", async (event) => {
     const response = await fetch("/api/like", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({post_id: postId})
+      body: JSON.stringify({post_id: postId, oc_id: document.getElementById("twitter-oc-switcher") ? document.getElementById("twitter-oc-switcher").value : null})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not like post.");
@@ -165,7 +165,7 @@ document.addEventListener("click", async (event) => {
     const response = await fetch("/api/retweet", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({post_id: postId})
+      body: JSON.stringify({post_id: postId, oc_id: document.getElementById("twitter-oc-switcher") ? document.getElementById("twitter-oc-switcher").value : null})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not retweet this post.");
@@ -183,3 +183,14 @@ document.addEventListener("click", async (event) => {
     button.disabled = false;
   }
 });
+
+// Twitter/X identity switcher: each Like and Retweet is performed by the selected OC.
+(() => {
+  const switcher = document.getElementById("twitter-oc-switcher");
+  if (!switcher) return;
+  switcher.addEventListener("change", () => {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("oc_id", switcher.value);
+    window.location.assign(nextUrl.toString());
+  });
+})();

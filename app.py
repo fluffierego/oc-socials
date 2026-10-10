@@ -280,6 +280,18 @@ def init():
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    c.execute("""CREATE TABLE IF NOT EXISTS oc_tweet_likes (
+        post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, oc_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS oc_tweet_retweets (
+        post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, oc_id)
+    )""")
     # Small migrations so an older copy of this project keeps working.
     columns = {row["name"] for row in c.execute("PRAGMA table_info(users)").fetchall()}
     reply_columns = {row["name"] for row in c.execute("PRAGMA table_info(replies)").fetchall()}
@@ -591,35 +603,55 @@ def instagram():
 @app.route("/twitter")
 @login_required
 def twitter():
+    user = current_user()
     c = conn()
+    owned_ocs = c.execute(
+        "SELECT id, name, username, avatar FROM ocs WHERE owner_id=? ORDER BY name",
+        (user["id"],)
+    ).fetchall()
+    owned_ids = {int(oc["id"]) for oc in owned_ocs}
+    requested_oc_id = request.args.get("oc_id", type=int)
+    if requested_oc_id in owned_ids:
+        active_oc_id = requested_oc_id
+    else:
+        active_oc_id = int(owned_ocs[0]["id"]) if owned_ocs else None
+
     posts = c.execute("""
         SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
-               (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS like_count,
-               EXISTS(
-                   SELECT 1 FROM post_likes l
-                   WHERE l.post_id=p.id AND l.user_id=?
-               ) AS liked_by_me,
-                (SELECT COUNT(*) FROM retweets rt WHERE rt.post_id=p.id) AS retweet_count,
-                EXISTS(
-                    SELECT 1 FROM retweets rt
-                    WHERE rt.post_id=p.id AND rt.user_id=?
-                ) AS retweeted_by_me
-        FROM posts p JOIN ocs o ON o.id=p.oc_id
-        WHERE p.platform='twitter' ORDER BY p.id DESC
-    """, (current_user()["id"], current_user()["id"])).fetchall()
-    replies = c.execute("""
-      SELECT r.*, o.name, o.username, o.avatar,
-             (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
-             EXISTS(
-                 SELECT 1 FROM reply_likes rl
-                 WHERE rl.reply_id=r.id AND rl.user_id=?
-             ) AS reply_liked_by_me
-      FROM replies r JOIN ocs o ON o.id=r.oc_id
-      ORDER BY r.id
-    """, (current_user()["id"],)).fetchall()
-    c.close()
-    return render_template("twitter.html", posts=posts, replies=replies, user=current_user())
+            ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) +
+             (SELECT COUNT(*) FROM oc_tweet_likes ol WHERE ol.post_id=p.id)) AS like_count,
+            EXISTS(
+                SELECT 1 FROM oc_tweet_likes ol
+                WHERE ol.post_id=p.id AND ol.oc_id=?
+            ) AS liked_by_me,
+            ((SELECT COUNT(*) FROM retweets rt WHERE rt.post_id=p.id) +
+             (SELECT COUNT(*) FROM oc_tweet_retweets ort WHERE ort.post_id=p.id)) AS retweet_count,
+            EXISTS(
+                SELECT 1 FROM oc_tweet_retweets ort
+                WHERE ort.post_id=p.id AND ort.oc_id=?
+            ) AS retweeted_by_me
+        FROM posts p
+        JOIN ocs o ON o.id=p.oc_id
+        WHERE p.platform='twitter'
+        ORDER BY p.id DESC
+    """, (active_oc_id, active_oc_id)).fetchall()
 
+    replies = c.execute("""
+        SELECT r.*, o.name, o.username, o.avatar,
+            (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
+            EXISTS(
+                SELECT 1 FROM reply_likes rl
+                WHERE rl.reply_id=r.id AND rl.user_id=?
+            ) AS reply_liked_by_me
+        FROM replies r
+        JOIN ocs o ON o.id=r.oc_id
+        ORDER BY r.id
+    """, (user["id"],)).fetchall()
+    c.close()
+    return render_template(
+        "twitter.html", posts=posts, replies=replies, user=user,
+        owned_ocs=owned_ocs, active_oc_id=active_oc_id
+    )
 
 @app.route("/messages")
 @login_required
@@ -1039,10 +1071,11 @@ def api_retweet():
     data = request.get_json(silent=True) or request.form
     try:
         post_id = int(data.get("post_id"))
+        oc_id = int(data.get("oc_id"))
     except (TypeError, ValueError):
-        return jsonify(error="Invalid post ID"), 400
+        return jsonify(error="Choose an OC and a post"), 400
 
-    user_id = current_user()["id"]
+    user = current_user()
     c = conn()
     post = c.execute(
         "SELECT id FROM posts WHERE id=? AND platform='twitter'", (post_id,)
@@ -1050,31 +1083,36 @@ def api_retweet():
     if not post:
         c.close()
         return jsonify(error="Twitter/X post not found"), 404
+    actor = c.execute(
+        "SELECT id FROM ocs WHERE id=? AND owner_id=?", (oc_id, user["id"])
+    ).fetchone()
+    if not actor:
+        c.close()
+        return jsonify(error="You can only retweet as one of your own OCs"), 403
 
     existing = c.execute(
-        "SELECT 1 FROM retweets WHERE post_id=? AND user_id=?",
-        (post_id, user_id)
+        "SELECT 1 FROM oc_tweet_retweets WHERE post_id=? AND oc_id=?",
+        (post_id, oc_id)
     ).fetchone()
     if existing:
         c.execute(
-            "DELETE FROM retweets WHERE post_id=? AND user_id=?",
-            (post_id, user_id)
+            "DELETE FROM oc_tweet_retweets WHERE post_id=? AND oc_id=?",
+            (post_id, oc_id)
         )
         retweeted = False
     else:
         c.execute(
-            "INSERT OR IGNORE INTO retweets(post_id, user_id) VALUES(?, ?)",
-            (post_id, user_id)
+            "INSERT OR IGNORE INTO oc_tweet_retweets(post_id, oc_id) VALUES(?, ?)",
+            (post_id, oc_id)
         )
         retweeted = True
-
     c.commit()
-    count = c.execute(
-        "SELECT COUNT(*) FROM retweets WHERE post_id=?", (post_id,)
-    ).fetchone()[0]
+    count = (
+        c.execute("SELECT COUNT(*) FROM retweets WHERE post_id=?", (post_id,)).fetchone()[0]
+        + c.execute("SELECT COUNT(*) FROM oc_tweet_retweets WHERE post_id=?", (post_id,)).fetchone()[0]
+    )
     c.close()
-    return jsonify(ok=True, retweeted=retweeted, count=count)
-
+    return jsonify(ok=True, retweeted=retweeted, count=count, actor_oc_id=oc_id)
 
 @app.route("/api/like", methods=["POST"])
 @login_required
@@ -1083,39 +1121,67 @@ def api_like():
     try:
         post_id = int(data.get("post_id"))
     except (TypeError, ValueError):
-        return jsonify(error="Invalid post ID"), 400
+        return jsonify(error="Invalid post"), 400
 
-    user_id = current_user()["id"]
+    user = current_user()
     c = conn()
-    if not c.execute("SELECT id FROM posts WHERE id=?", (post_id,)).fetchone():
+    post = c.execute("SELECT id, platform FROM posts WHERE id=?", (post_id,)).fetchone()
+    if not post:
         c.close()
         return jsonify(error="Post not found"), 404
 
-    existing = c.execute(
-        "SELECT 1 FROM post_likes WHERE post_id=? AND user_id=?",
-        (post_id, user_id)
-    ).fetchone()
-
-    if existing:
-        c.execute(
-            "DELETE FROM post_likes WHERE post_id=? AND user_id=?",
-            (post_id, user_id)
+    # Twitter actions belong to the selected OC. Instagram keeps its existing
+    # Discord-account-level like behavior until its own OC-specific migration.
+    if post["platform"] == "twitter":
+        try:
+            oc_id = int(data.get("oc_id"))
+        except (TypeError, ValueError):
+            c.close()
+            return jsonify(error="Choose which OC is liking this tweet"), 400
+        actor = c.execute(
+            "SELECT id FROM ocs WHERE id=? AND owner_id=?", (oc_id, user["id"])
+        ).fetchone()
+        if not actor:
+            c.close()
+            return jsonify(error="You can only like tweets as one of your own OCs"), 403
+        existing = c.execute(
+            "SELECT 1 FROM oc_tweet_likes WHERE post_id=? AND oc_id=?",
+            (post_id, oc_id)
+        ).fetchone()
+        if existing:
+            c.execute(
+                "DELETE FROM oc_tweet_likes WHERE post_id=? AND oc_id=?",
+                (post_id, oc_id)
+            )
+            liked = False
+        else:
+            c.execute(
+                "INSERT OR IGNORE INTO oc_tweet_likes(post_id, oc_id) VALUES(?, ?)",
+                (post_id, oc_id)
+            )
+            liked = True
+        c.commit()
+        count = (
+            c.execute("SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)).fetchone()[0]
+            + c.execute("SELECT COUNT(*) FROM oc_tweet_likes WHERE post_id=?", (post_id,)).fetchone()[0]
         )
+        c.close()
+        return jsonify(ok=True, liked=liked, count=count, actor_oc_id=oc_id)
+
+    user_id = user["id"]
+    existing = c.execute(
+        "SELECT 1 FROM post_likes WHERE post_id=? AND user_id=?", (post_id, user_id)
+    ).fetchone()
+    if existing:
+        c.execute("DELETE FROM post_likes WHERE post_id=? AND user_id=?", (post_id, user_id))
         liked = False
     else:
-        c.execute(
-            "INSERT OR IGNORE INTO post_likes(post_id, user_id) VALUES(?, ?)",
-            (post_id, user_id)
-        )
+        c.execute("INSERT OR IGNORE INTO post_likes(post_id, user_id) VALUES(?, ?)", (post_id, user_id))
         liked = True
-
     c.commit()
-    count = c.execute(
-        "SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)
-    ).fetchone()[0]
+    count = c.execute("SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)).fetchone()[0]
     c.close()
     return jsonify(ok=True, liked=liked, count=count)
-
 
 @app.route("/api/reply-like", methods=["POST"])
 @login_required
