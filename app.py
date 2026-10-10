@@ -990,11 +990,44 @@ def edit_oc(oc_id):
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         username = request.form.get("username", "").strip().lstrip("@")
+        banner_url = request.form.get("banner", "").strip()
+        uploaded_banner = request.files.get("banner_file")
+        if uploaded_banner and uploaded_banner.filename:
+            extension = Path(uploaded_banner.filename).suffix.lower()
+            allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+            if extension not in allowed_extensions:
+                c.close()
+                return render_template(
+                    "oc_edit.html", oc=oc, user=user,
+                    error="Please upload a JPG, PNG, WEBP, or GIF banner."
+                )
+            # Limit banner files to 10 MiB before uploading to storage.
+            uploaded_banner.stream.seek(0, 2)
+            size = uploaded_banner.stream.tell()
+            uploaded_banner.stream.seek(0)
+            if size > 10 * 1024 * 1024:
+                c.close()
+                return render_template(
+                    "oc_edit.html", oc=oc, user=user,
+                    error="Banner images must be 10 MB or smaller."
+                )
+            try:
+                banner_url = store_post_photo(
+                    uploaded_banner, f"banner_{oc_id}_{uuid.uuid4().hex}{extension}"
+                )
+            except Exception as exc:
+                c.close()
+                print(f"OC banner upload failed: {exc}")
+                return render_template(
+                    "oc_edit.html", oc=oc, user=user,
+                    error="Could not upload the banner. Check Supabase Storage configuration and try again."
+                )
+
         try:
             c.execute("""
               UPDATE ocs SET name=?,username=?,bio=?,avatar=?,banner=? WHERE id=? AND owner_id=?
             """, (name, username, request.form.get("bio","").strip(),
-                  request.form.get("avatar","").strip(), request.form.get("banner","").strip(),
+                  request.form.get("avatar","").strip(), banner_url,
                   oc_id, user["id"]))
             c.commit()
         except DB_INTEGRITY_ERRORS:
