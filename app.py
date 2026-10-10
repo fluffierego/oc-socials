@@ -577,7 +577,7 @@ def logout():
 def instagram():
     c = conn()
     posts = c.execute("""
-        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id, o.owner_id AS author_owner_id,
                (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS like_count,
                EXISTS(
                    SELECT 1 FROM post_likes l
@@ -617,7 +617,7 @@ def twitter():
         active_oc_id = int(owned_ocs[0]["id"]) if owned_ocs else None
 
     posts = c.execute("""
-        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id, o.owner_id AS author_owner_id,
             ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) +
              (SELECT COUNT(*) FROM oc_tweet_likes ol WHERE ol.post_id=p.id)) AS like_count,
             EXISTS(
@@ -678,7 +678,7 @@ def twitter_profile(oc_id):
     active_oc_id = int(active_oc["id"]) if active_oc else None
 
     posts = c.execute("""
-        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id, o.owner_id AS author_owner_id,
             (SELECT COUNT(*) FROM oc_tweet_likes l WHERE l.post_id=p.id) AS like_count,
             EXISTS(
                 SELECT 1 FROM oc_tweet_likes l
@@ -1108,6 +1108,38 @@ def toggle_oc_follow():
     ).fetchone()[0]
     c.close()
     return jsonify(ok=True, following=following, followers=followers, following_count=following_count)
+
+
+@app.route("/api/post/delete", methods=["POST"])
+@login_required
+def delete_post():
+    data = request.get_json(silent=True) or request.form
+    try:
+        post_id = int(data.get("post_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid post ID"), 400
+
+    c = conn()
+    owned_post = c.execute("""
+        SELECT p.id
+        FROM posts p JOIN ocs o ON o.id=p.oc_id
+        WHERE p.id=? AND o.owner_id=?
+    """, (post_id, current_user()["id"])).fetchone()
+    if not owned_post:
+        c.close()
+        return jsonify(error="You can only delete posts made by your own OCs."), 403
+
+    # Remove related records before the post so likes/retweets/comments don't linger.
+    c.execute("DELETE FROM reply_likes WHERE reply_id IN (SELECT id FROM replies WHERE post_id=?)", (post_id,))
+    c.execute("DELETE FROM replies WHERE post_id=?", (post_id,))
+    c.execute("DELETE FROM post_likes WHERE post_id=?", (post_id,))
+    c.execute("DELETE FROM retweets WHERE post_id=?", (post_id,))
+    c.execute("DELETE FROM oc_tweet_likes WHERE post_id=?", (post_id,))
+    c.execute("DELETE FROM oc_tweet_retweets WHERE post_id=?", (post_id,))
+    c.execute("DELETE FROM posts WHERE id=?", (post_id,))
+    c.commit()
+    c.close()
+    return jsonify(ok=True, post_id=post_id)
 
 
 @app.route("/api/post", methods=["POST"])

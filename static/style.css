@@ -510,3 +510,20 @@
 .twitter-profile-feed .user img { width:42px; height:42px; border-radius:50%; object-fit:cover; }
 .twitter-profile-empty { padding:28px 18px; color:#8899a6; text-align:center; }
 @media (max-width:600px) { .twitter-profile-banner { height:140px; } .twitter-profile-avatar { width:88px; height:88px; margin-top:-42px; } .twitter-profile-stats { gap:12px; } }
+
+
+/* OC Socials post deletion */
+.delete-post-button {
+  appearance: none;
+  border: 0 !important;
+  background: transparent !important;
+  color: #8a8a8a;
+  padding: 4px 6px !important;
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+.delete-post-button:hover { color: #ed4956 !important; }
+.delete-post-button:disabled { opacity: .6; cursor: wait; }

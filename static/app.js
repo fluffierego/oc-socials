@@ -194,3 +194,28 @@ document.addEventListener("click", async (event) => {
     window.location.assign(nextUrl.toString());
   });
 })();
+
+
+// OC Socials: owner-only post deletion
+ document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".delete-post-button");
+  if (!button || button.disabled) return;
+  if (!window.confirm("Delete this post? This cannot be undone.")) return;
+
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/post/delete", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({post_id: button.dataset.postId})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not delete this post.");
+    const card = button.closest("article");
+    if (card) card.remove();
+  } catch (error) {
+    alert(error.message || "Could not delete this post.");
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
+});
