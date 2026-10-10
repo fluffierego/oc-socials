@@ -870,7 +870,7 @@ def edit_oc(oc_id):
 def profile(oc_id):
     c = conn()
     oc = c.execute("SELECT * FROM ocs WHERE id=?", (oc_id,)).fetchone()
-    posts = c.execute("SELECT * FROM posts WHERE oc_id=? ORDER BY id DESC", (oc_id,)).fetchall()
+    posts = c.execute("SELECT * FROM posts WHERE oc_id=? AND platform='instagram' ORDER BY id DESC", (oc_id,)).fetchall()
     c.close()
     if not oc:
         return "Not found", 404

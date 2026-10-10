@@ -1,1 +1,46 @@
-<!doctype html><html><head><title>{{oc['name']}}</title><link rel="stylesheet" href="/static/style.css"></head><body><nav><b>OC Socials</b><span><a href="/">Home</a><a href="/instagram">Instagram</a><a href="/twitter">Twitter/X</a><a href="/messages">iMessage</a></span></nav><main class="profile"><div class="banner" {% if oc['banner'] %}style="background-image:url('{{oc['banner']}}')"{% endif %}></div><img class="profile-avatar" src="{{oc['avatar']}}" onerror="this.style.display='none'"><div class="profile-body"><div class="profile-head"><div><h1>{{oc['name']}}</h1><h3>@{{oc['username']}}</h3></div>{% if user['id']==oc['owner_id'] %}<a class="btn secondary" href="/oc/{{oc['id']}}/edit">Edit profile</a>{% endif %}</div><p>{{oc['bio']}}</p></div><div class="profile-posts">{% for p in posts %}<article class="post">{% if p['image'] %}<img class="photo" src="{{p['image']}}">{% endif %}<p>{{p['text']}}</p><small>{{p['platform']}}</small></article>{% else %}<p>No posts yet.</p>{% endfor %}</div></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{oc['name']}} (@{{oc['username']}}) • Instagram • OC Socials</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="topnav">
+    <b>Instagram</b>
+    <span><a href="{{ url_for('home') }}">Home</a><a href="{{ url_for('instagram') }}">Instagram</a><a href="{{ url_for('twitter') }}">Twitter/X</a><a href="{{ url_for('messages') }}">iMessage</a></span>
+  </nav>
+  <main class="ig-profile-page">
+    <section class="ig-profile-header">
+      <div class="ig-profile-avatar-wrap">
+        {% if oc['avatar'] %}<img class="ig-profile-avatar" src="{{oc['avatar']}}" alt="{{oc['name']}} profile picture">{% else %}<div class="ig-profile-avatar ig-profile-avatar-fallback">{{oc['name'][:1]}}</div>{% endif %}
+      </div>
+      <div class="ig-profile-details">
+        <div class="ig-profile-title-row">
+          <h1>{{oc['username']}}</h1>
+          {% if user['id'] == oc['owner_id'] %}<a class="ig-profile-edit" href="{{ url_for('edit_oc', oc_id=oc['id']) }}">Edit profile</a>{% endif %}
+          <span class="ig-profile-menu" aria-hidden="true">•••</span>
+        </div>
+        <div class="ig-profile-stats"><span><strong>{{posts|length}}</strong> posts</span></div>
+        <div class="ig-profile-display-name"><strong>{{oc['name']}}</strong></div>
+        {% if oc['bio'] %}<p class="ig-profile-bio">{{oc['bio']}}</p>{% endif %}
+      </div>
+    </section>
+    <div class="ig-profile-tabs"><span class="active">▦ <span>POSTS</span></span></div>
+    {% if posts %}
+      <section class="ig-profile-grid" aria-label="{{oc['name']}} Instagram posts">
+        {% for p in posts %}
+          <a class="ig-profile-grid-tile" href="{{ url_for('instagram') }}#post-{{p['id']}}" aria-label="Open {{oc['name']}}'s Instagram post">
+            {% if p['image'] %}<img src="{{p['image']}}" alt="Instagram post by {{oc['name']}}" loading="lazy">{% else %}<div class="ig-profile-grid-text">{{p['text'] or 'Instagram post'}}</div>{% endif %}
+            <span class="ig-profile-grid-overlay"><span>♡</span><span>View post ↗</span></span>
+          </a>
+        {% endfor %}
+      </section>
+    {% else %}
+      <div class="ig-profile-empty"><div class="ig-profile-empty-icon">▧</div><h2>No posts yet</h2><p>When {{oc['name']}} shares photos on Instagram, they'll appear here.</p></div>
+    {% endif %}
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
