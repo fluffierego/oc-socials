@@ -482,3 +482,31 @@
   .twitter-switchbar span { display: none; }
   .twitter-page article.tweet { padding: 12px; }
 }
+
+/* Twitter/X individual OC profiles */
+.twitter-profile-main { width: min(100%, 600px); margin: 0 auto; border-left: 1px solid #2f3336; border-right: 1px solid #2f3336; min-height: 80vh; }
+.twitter-profile-card { border-bottom: 1px solid #2f3336; }
+.twitter-profile-banner { width: 100%; height: 190px; background-color: #263340; background-size: cover; background-position: center; }
+.twitter-profile-banner-empty { background: linear-gradient(135deg, #17202b, #384d5e); }
+.twitter-profile-info { padding: 0 16px; }
+.twitter-profile-avatar-row { display: flex; align-items: flex-start; justify-content: space-between; min-height: 72px; }
+.twitter-profile-avatar { width: 112px; height: 112px; margin-top: -54px; border-radius: 50%; border: 4px solid #000; background: #222; object-fit: cover; }
+.twitter-profile-actions { padding-top: 12px; display: flex; align-items: center; }
+.twitter-profile-edit, .twitter-profile-follow button { border: 1px solid #536471; border-radius: 999px; background: #eff3f4; color: #0f1419; font-weight: 700; padding: 9px 16px; text-decoration: none; cursor: pointer; }
+.twitter-profile-follow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.twitter-profile-follow label { color:#aab8c2; font-size:12px; }
+.twitter-profile-follow select { max-width:145px; background:#16181c; color:#fff; border:1px solid #536471; border-radius:8px; padding:8px; }
+.twitter-profile-info h1 { margin:8px 0 0; font-size:21px; overflow-wrap:anywhere; }
+.twitter-profile-handle { color:#8899a6; margin:2px 0 12px; }
+.twitter-profile-bio { white-space:pre-wrap; margin:0 0 12px; }
+.twitter-profile-stats { display:flex; gap:18px; flex-wrap:wrap; padding:8px 0 16px; color:#8899a6; }
+.twitter-profile-stats strong { color:#fff; }
+.twitter-profile-tabs { display:flex; justify-content:space-around; border-bottom:1px solid #2f3336; color:#8899a6; font-weight:700; }
+.twitter-profile-tabs span { padding:15px 10px; }
+.twitter-profile-tabs .active { color:#fff; border-bottom:3px solid #1d9bf0; }
+.twitter-profile-feed .tweet { border:0; border-bottom:1px solid #2f3336; border-radius:0; }
+.twitter-profile-feed .twitter-author-link { display:flex; gap:10px; align-items:center; color:inherit; text-decoration:none; min-width:0; }
+.twitter-profile-feed .twitter-author-link:hover b { text-decoration:underline; }
+.twitter-profile-feed .user img { width:42px; height:42px; border-radius:50%; object-fit:cover; }
+.twitter-profile-empty { padding:28px 18px; color:#8899a6; text-align:center; }
+@media (max-width:600px) { .twitter-profile-banner { height:140px; } .twitter-profile-avatar { width:88px; height:88px; margin-top:-42px; } .twitter-profile-stats { gap:12px; } }

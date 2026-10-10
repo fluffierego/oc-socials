@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@{{oc['username']}} · Twitter/X</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="twitter-page twitter-profile-page">
+<nav><b>𝕏 Twitter/X</b><span><a href="/twitter?actor={{active_oc_id or ''}}">Home</a><a href="/instagram">Instagram</a><a href="/messages">iMessage</a></span></nav>
+<section class="twitter-switchbar">
+  <form action="/twitter/profile/{{oc['id']}}" method="get" class="twitter-profile-switch-form">
+    <label for="twitter-oc-switcher">Switch OC</label>
+    <select id="twitter-oc-switcher" name="actor" aria-label="Switch Twitter/X OC" onchange="this.form.submit()" {% if not owned_ocs %}disabled{% endif %}>
+      {% for switch_oc in owned_ocs %}<option value="{{switch_oc['id']}}" {% if switch_oc['id'] == active_oc_id %}selected{% endif %}>@{{switch_oc['username']}}</option>{% endfor %}
+    </select>
+    <span>Interacting as this OC</span>
+  </form>
+</section>
+<main class="twitter-profile-main">
+  <section class="twitter-profile-card">
+    {% if oc['banner'] %}<div class="twitter-profile-banner" style="background-image:url(&quot;{{oc['banner']}}&quot;)"></div>{% else %}<div class="twitter-profile-banner twitter-profile-banner-empty"></div>{% endif %}
+    <div class="twitter-profile-info">
+      <div class="twitter-profile-avatar-row"><img class="twitter-profile-avatar" src="{{oc['avatar'] or ''}}" alt=""><div class="twitter-profile-actions">
+        {% if is_owner %}<a class="twitter-profile-edit" href="/oc/{{oc['id']}}/edit">Edit profile</a>
+        {% elif owned_ocs %}<form class="ig-follow-controls twitter-profile-follow" data-followed-oc="{{oc['id']}}"><label for="twitter-follow-as">Follow as</label><select class="ig-follow-as" id="twitter-follow-as" name="follower_oc_id">{% for own_oc in owned_ocs if own_oc['id'] != oc['id'] %}<option value="{{own_oc['id']}}" data-following="{{'1' if oc_is_following(own_oc['id'], oc['id']) else '0'}}" {% if own_oc['id'] == active_oc_id %}selected{% endif %}>@{{own_oc['username']}}</option>{% endfor %}</select><button class="ig-follow-button" type="submit" data-followed-oc="{{oc['id']}}">{{'Following' if is_following else 'Follow'}}</button></form>{% endif %}
+      </div></div>
+      <h1>{{oc['name']}}</h1><p class="twitter-profile-handle">@{{oc['username']}}</p>
+      {% if oc['bio'] %}<p class="twitter-profile-bio">{{oc['bio']}}</p>{% endif %}
+      <div class="twitter-profile-stats"><span><strong>{{posts|length}}</strong> Tweets</span><span><strong class="ig-followers-count">{{follower_count}}</strong> Followers</span><span><strong class="ig-following-count">{{following_count}}</strong> Following</span></div>
+      <div class="twitter-profile-tabs"><span class="active">Posts</span><span>Media</span><span>Likes</span></div>
+    </div>
+  </section>
+  <section class="twitter-profile-feed">
+  {% for p in posts %}
+    <article class="tweet" id="post-{{p['id']}}">
+      <div class="user"><a class="twitter-author-link" href="{{url_for('twitter_profile', oc_id=p['author_oc_id'], actor=active_oc_id)}}"><img src="{{p['avatar'] or ''}}" alt=""><div><b>{{p['name']}}</b><small>@{{p['username']}}</small></div></a></div>
+      <p>{{p['text']}}</p>
+      {% if p['image'] %}<img class="photo" src="{{p['image']}}" alt="Tweet image">{% endif %}
+      <div class="post-actions">
+        <button type="button" class="like-button{% if p['liked_by_me'] %} liked{% endif %}" data-post="{{p['id']}}" aria-pressed="{{'true' if p['liked_by_me'] else 'false'}}"><span class="like-heart">{{'♥' if p['liked_by_me'] else '♡'}}</span><span class="like-label">{{'Liked' if p['liked_by_me'] else 'Like'}}</span></button>
+        <span class="like-count" data-like-count="{{p['id']}}">{{p['like_count']}}</span>
+        <button type="button" class="retweet-button{% if p['retweeted_by_me'] %} retweeted{% endif %}" data-post="{{p['id']}}" aria-label="Retweet post" aria-pressed="{{'true' if p['retweeted_by_me'] else 'false'}}"><span class="retweet-icon">🔁</span><span class="retweet-label">{{'Retweeted' if p['retweeted_by_me'] else 'Retweet'}}</span><span class="retweet-count" data-retweet-count="{{p['id']}}">{{p['retweet_count']}}</span></button>
+        <button type="button" class="share-post-button" data-post="{{p['id']}}" aria-label="Share post">↗ Share</button>
+      </div>
+      {% for r in replies if r['post_id'] == p['id'] and not r['parent_id'] %}
+        <div class="ig-comment" id="comment-{{r['id']}}"><img class="ig-comment-avatar" src="{{r['avatar'] or ''}}" alt=""><div class="ig-comment-content"><div class="ig-comment-line"><b>{{r['username']}}</b> <span>{{r['text']}}</span></div><small class="ig-comment-meta"><button type="button" class="comment-reply-trigger" data-parent-id="{{r['id']}}" data-username="{{r['username']}}">Reply</button> · Just now</small>
+        {% for child in replies if child['parent_id'] == r['id'] %}<div class="ig-comment ig-comment-child" id="comment-{{child['id']}}"><img class="ig-comment-avatar" src="{{child['avatar'] or ''}}" alt=""><div class="ig-comment-content"><div class="ig-comment-line"><b>{{child['username']}}</b> <span>{{child['text']}}</span></div></div></div>{% endfor %}
+        </div></div>
+      {% endfor %}
+      {% if owned_ocs %}<form class="reply-form" data-post="{{p['id']}}"><input type="hidden" name="parent_id" value=""><select name="oc_id" required aria-label="Reply as OC">{% for own_oc in owned_ocs %}<option value="{{own_oc['id']}}" {% if own_oc['id'] == active_oc_id %}selected{% endif %}>Reply as @{{own_oc['username']}}</option>{% endfor %}</select><input type="text" name="text" placeholder="Reply…" required><button type="submit">Reply</button></form>{% endif %}
+    </article>
+  {% else %}<p class="twitter-profile-empty">No tweets yet.</p>{% endfor %}
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

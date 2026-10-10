@@ -653,6 +653,81 @@ def twitter():
         owned_ocs=owned_ocs, active_oc_id=active_oc_id
     )
 
+@app.route("/twitter/profile/<int:oc_id>")
+@login_required
+def twitter_profile(oc_id):
+    user = current_user()
+    c = conn()
+    oc = c.execute("SELECT * FROM ocs WHERE id=?", (oc_id,)).fetchone()
+    if not oc:
+        c.close()
+        return "Not found", 404
+
+    owned_ocs = c.execute(
+        "SELECT * FROM ocs WHERE owner_id=? ORDER BY name", (user["id"],)
+    ).fetchall()
+    requested_actor = request.args.get("actor", "")
+    try:
+        requested_actor = int(requested_actor) if requested_actor else None
+    except (TypeError, ValueError):
+        requested_actor = None
+    active_oc = next(
+        (item for item in owned_ocs if int(item["id"]) == requested_actor),
+        owned_ocs[0] if owned_ocs else None,
+    )
+    active_oc_id = int(active_oc["id"]) if active_oc else None
+
+    posts = c.execute("""
+        SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id,
+            (SELECT COUNT(*) FROM oc_tweet_likes l WHERE l.post_id=p.id) AS like_count,
+            EXISTS(
+                SELECT 1 FROM oc_tweet_likes l
+                WHERE l.post_id=p.id AND l.oc_id=?
+            ) AS liked_by_me,
+            ((SELECT COUNT(*) FROM retweets rt WHERE rt.post_id=p.id) +
+             (SELECT COUNT(*) FROM oc_tweet_retweets ort WHERE ort.post_id=p.id)) AS retweet_count,
+            EXISTS(
+                SELECT 1 FROM oc_tweet_retweets ort
+                WHERE ort.post_id=p.id AND ort.oc_id=?
+            ) AS retweeted_by_me
+        FROM posts p JOIN ocs o ON o.id=p.oc_id
+        WHERE p.platform='twitter' AND p.oc_id=?
+        ORDER BY p.id DESC
+    """, (active_oc_id, active_oc_id, oc_id)).fetchall()
+
+    replies = c.execute("""
+        SELECT r.*, o.name, o.username, o.avatar,
+            (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
+            EXISTS(
+                SELECT 1 FROM reply_likes rl
+                WHERE rl.reply_id=r.id AND rl.user_id=?
+            ) AS reply_liked_by_me
+        FROM replies r JOIN ocs o ON o.id=r.oc_id
+        ORDER BY r.id
+    """, (user["id"],)).fetchall()
+
+    follower_count = c.execute(
+        "SELECT COUNT(*) FROM oc_follows WHERE followed_oc_id=?", (oc_id,)
+    ).fetchone()[0]
+    following_count = c.execute(
+        "SELECT COUNT(*) FROM oc_follows WHERE follower_oc_id=?", (oc_id,)
+    ).fetchone()[0]
+    is_owner = int(oc["owner_id"]) == int(user["id"])
+    is_following = False
+    if active_oc_id and active_oc_id != oc_id:
+        is_following = bool(c.execute(
+            "SELECT 1 FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?",
+            (active_oc_id, oc_id),
+        ).fetchone())
+    c.close()
+    return render_template(
+        "twitter_profile.html", oc=oc, posts=posts, replies=replies,
+        user=user, owned_ocs=owned_ocs, active_oc_id=active_oc_id,
+        follower_count=follower_count, following_count=following_count,
+        is_owner=is_owner, is_following=is_following,
+    )
+
+
 @app.route("/messages")
 @login_required
 def messages():
