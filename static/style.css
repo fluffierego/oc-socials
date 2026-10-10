@@ -375,3 +375,14 @@
   .ig-profile-grid-overlay { gap:8px; font-size:12px; }
   .ig-profile-grid-overlay span:last-child { display:none; }
 }
+
+/* OC profile follow controls */
+.ig-follow-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-left:2px; }
+.ig-follow-label { font-size:12px; color:var(--ig-profile-muted, #737373); }
+.ig-follow-as { max-width:150px; min-width:90px; padding:7px 9px; border:1px solid var(--ig-profile-border, #dbdbdb); border-radius:8px; background:var(--ig-profile-surface, #fff); color:inherit; font:inherit; font-size:12px; }
+.ig-follow-button { border:1px solid #0095f6; border-radius:8px; padding:7px 13px; background:#0095f6; color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+.ig-follow-button.is-following { border-color:var(--ig-profile-border, #dbdbdb); background:transparent; color:inherit; }
+.ig-follow-button:disabled { opacity:.6; cursor:wait; }
+.ig-profile-stats { flex-wrap:wrap; }
+.ig-profile-stats > span { white-space:nowrap; }
+@media (max-width:600px) { .ig-follow-controls { gap:6px; } .ig-follow-label { display:none; } .ig-follow-as { max-width:105px; min-width:80px; padding:6px; } .ig-follow-button { padding:6px 9px; font-size:12px; } }

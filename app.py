@@ -172,6 +172,7 @@ def init():
         required = {
             "users", "ocs", "posts", "login_codes", "discord_outbox",
             "post_likes", "retweets", "reply_likes", "replies", "chats", "chat_members", "chat_users", "messages",
+            "oc_follows",
         }
         existing = {
             row["table_name"] for row in c.execute(
@@ -289,6 +290,13 @@ def init():
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
     if "owner_id" not in chat_columns:
         c.execute("ALTER TABLE chats ADD COLUMN owner_id INTEGER DEFAULT 0")
+    c.execute("""CREATE TABLE IF NOT EXISTS oc_follows (
+        follower_oc_id INTEGER NOT NULL,
+        followed_oc_id INTEGER NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (follower_oc_id, followed_oc_id),
+        CHECK (follower_oc_id <> followed_oc_id)
+    )""")
     c.execute("""INSERT OR IGNORE INTO chat_users(chat_id,user_id) SELECT cm.chat_id,o.owner_id FROM chat_members cm JOIN ocs o ON o.id=cm.oc_id""")
     c.commit()
     c.close()
@@ -303,7 +311,33 @@ def template_helpers():
         rows = c.execute("SELECT * FROM ocs WHERE owner_id=? ORDER BY name", (user_id,)).fetchall()
         c.close()
         return rows
-    return {"user_ocs": user_ocs}
+    def oc_follower_count(oc_id):
+        c = conn()
+        row = c.execute("SELECT COUNT(*) FROM oc_follows WHERE followed_oc_id=?", (oc_id,)).fetchone()
+        c.close()
+        return row[0] if row else 0
+
+    def oc_following_count(oc_id):
+        c = conn()
+        row = c.execute("SELECT COUNT(*) FROM oc_follows WHERE follower_oc_id=?", (oc_id,)).fetchone()
+        c.close()
+        return row[0] if row else 0
+
+    def oc_is_following(follower_oc_id, followed_oc_id):
+        c = conn()
+        row = c.execute(
+            "SELECT 1 FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?",
+            (follower_oc_id, followed_oc_id),
+        ).fetchone()
+        c.close()
+        return row is not None
+
+    return {
+        "user_ocs": user_ocs,
+        "oc_follower_count": oc_follower_count,
+        "oc_following_count": oc_following_count,
+        "oc_is_following": oc_is_following,
+    }
 
 
 def current_user():
@@ -875,6 +909,65 @@ def profile(oc_id):
     if not oc:
         return "Not found", 404
     return render_template("profile.html", oc=oc, posts=posts, user=current_user())
+
+
+@app.route("/api/oc-follow", methods=["POST"])
+@login_required
+def toggle_oc_follow():
+    data = request.get_json(silent=True) or request.form
+    try:
+        follower_oc_id = int(data.get("follower_oc_id"))
+        followed_oc_id = int(data.get("followed_oc_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Choose an OC to follow as"), 400
+
+    if follower_oc_id == followed_oc_id:
+        return jsonify(error="An OC cannot follow itself"), 400
+
+    user = current_user()
+    c = conn()
+    actor = c.execute(
+        "SELECT id FROM ocs WHERE id=? AND owner_id=?",
+        (follower_oc_id, user["id"]),
+    ).fetchone()
+    target = c.execute(
+        "SELECT id FROM ocs WHERE id=?",
+        (followed_oc_id,),
+    ).fetchone()
+    if not actor:
+        c.close()
+        return jsonify(error="You can only follow as one of your own OCs"), 403
+    if not target:
+        c.close()
+        return jsonify(error="Profile not found"), 404
+
+    existing = c.execute(
+        "SELECT 1 FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?",
+        (follower_oc_id, followed_oc_id),
+    ).fetchone()
+    if existing:
+        c.execute(
+            "DELETE FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?",
+            (follower_oc_id, followed_oc_id),
+        )
+        following = False
+    else:
+        c.execute(
+            "INSERT OR IGNORE INTO oc_follows(follower_oc_id, followed_oc_id) VALUES(?, ?)",
+            (follower_oc_id, followed_oc_id),
+        )
+        following = True
+    c.commit()
+    followers = c.execute(
+        "SELECT COUNT(*) FROM oc_follows WHERE followed_oc_id=?",
+        (followed_oc_id,),
+    ).fetchone()[0]
+    following_count = c.execute(
+        "SELECT COUNT(*) FROM oc_follows WHERE follower_oc_id=?",
+        (followed_oc_id,),
+    ).fetchone()[0]
+    c.close()
+    return jsonify(ok=True, following=following, followers=followers, following_count=following_count)
 
 
 @app.route("/api/post", methods=["POST"])
