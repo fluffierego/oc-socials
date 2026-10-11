@@ -21,11 +21,56 @@
 
       <div class="imessage-header-name">{{chat['name']}}</div>
 
-      <div class="imessage-members">
+      <div class="message-members">
         {% for m in members %}
-          {{m['name']}}{% if not loop.last %}, {% endif %}
+          <a class="chat-member-link" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(160,160,180,.65)" href="{{ url_for('profile', oc_id=m['id']) }}">{{ m['name'] }}</a>{% if not loop.last %}, {% endif %}
         {% endfor %}
       </div>
+      {% if chat['owner_id'] == user['id'] %}
+      <form id="add-oc-to-chat-form" style="margin-top:.65rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        <select id="add-oc-to-chat-select" name="oc_id" required style="max-width:100%;padding:.45rem .6rem;border-radius:.5rem;">
+          <option value="">Add your friend's or your OC…</option>
+          {% for candidate in all_ocs %}
+            {% set already_member = namespace(found=false) %}
+            {% for member in members %}{% if member['id'] == candidate['id'] %}{% set already_member.found = true %}{% endif %}{% endfor %}
+            {% if not already_member.found %}
+              <option value="{{ candidate['id'] }}">{{ candidate['name'] }} (@{{ candidate['username'] }})</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+        <button type="submit">Add OC</button>
+        <span id="add-oc-to-chat-status" aria-live="polite"></span>
+      </form>
+      <script>
+      (() => {
+        const form = document.getElementById('add-oc-to-chat-form');
+        if (!form) return;
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const status = document.getElementById('add-oc-to-chat-status');
+          const select = document.getElementById('add-oc-to-chat-select');
+          const button = form.querySelector('button[type="submit"]');
+          if (!select.value) return;
+          button.disabled = true;
+          status.textContent = 'Adding…';
+          try {
+            const response = await fetch("{{ url_for('add_oc_to_chat', chat_id=chat['id']) }}", {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oc_id: select.value })
+            });
+            let result = {};
+            try { result = await response.json(); } catch (_) {}
+            if (!response.ok || !result.ok) throw new Error(result.error || 'Could not add that OC.');
+            window.location.reload();
+          } catch (error) {
+            status.textContent = error.message || 'Could not add that OC.';
+            button.disabled = false;
+          }
+        });
+      })();
+      </script>
+      {% endif %}
     </header>
 
     <section class="imessage-messages">

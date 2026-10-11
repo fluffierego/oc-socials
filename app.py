@@ -949,8 +949,11 @@ def chat(chat_id):
       WHERE m.chat_id=? ORDER BY m.id
     """, (chat_id,)).fetchall()
     mine = [m for m in members if m["owner_id"] == current_user()["id"]]
+    all_ocs = c.execute(
+        "SELECT id, name, username, avatar, owner_id FROM ocs ORDER BY name"
+    ).fetchall()
     c.close()
-    return render_template("chat.html", chat=chat_row, members=members, mine=mine, messages=msgs, user=current_user())
+    return render_template("chat.html", chat=chat_row, members=members, mine=mine, messages=msgs, user=current_user(), all_ocs=all_ocs)
 
 
 @app.route("/oc/new", methods=["GET", "POST"])
