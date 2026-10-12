@@ -1667,7 +1667,7 @@ def export_live_backup():
     archive_buffer.seek(0)
     response = send_file(
         archive_buffer,
-        mimetype="application/zip",
+        mimetype="application/zip"
         as_attachment=True,
         download_name="oc-socials-live-backup.zip",
         max_age=0,
