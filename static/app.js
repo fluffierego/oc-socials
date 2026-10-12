@@ -42,7 +42,10 @@ document.addEventListener("click", async (event) => {
     const response = await fetch("/api/like", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({post_id: postId, oc_id: document.getElementById("twitter-oc-switcher") ? document.getElementById("twitter-oc-switcher").value : null})
+      body: JSON.stringify({
+        post_id: postId,
+        oc_id: (document.getElementById("instagram-oc-switcher") || document.getElementById("twitter-oc-switcher"))?.value || null
+      })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not like post.");
@@ -184,6 +187,17 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+// Instagram identity switcher: likes are performed by the selected OC.
+(() => {
+  const switcher = document.getElementById("instagram-oc-switcher");
+  if (!switcher) return;
+  switcher.addEventListener("change", () => {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("oc_id", switcher.value);
+    window.location.assign(nextUrl.toString());
+  });
+})();
+
 // Twitter/X identity switcher: each Like and Retweet is performed by the selected OC.
 (() => {
   const switcher = document.getElementById("twitter-oc-switcher");
@@ -219,3 +233,49 @@ document.addEventListener("click", async (event) => {
     if (button.isConnected) button.disabled = false;
   }
 });
+
+// Instagram carousel controls: each post keeps its own current slide.
+document.querySelectorAll('[data-carousel]').forEach(carousel => {
+  const slides = [...carousel.querySelectorAll('.carousel-slide')];
+  if (slides.length < 2) return;
+  let index = 0;
+  const dots = [...carousel.querySelectorAll('.carousel-dot')];
+  const counter = carousel.querySelector('.carousel-counter');
+  const show = next => {
+    index = (next + slides.length) % slides.length;
+    slides.forEach((slide, i) => {
+      slide.classList.toggle('hidden', i !== index);
+      const video = slide.querySelector('video');
+      if (video && i !== index) video.pause();
+    });
+    dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+    if (counter) counter.textContent = `${index + 1}/${slides.length}`;
+  };
+  carousel.querySelector('.carousel-prev')?.addEventListener('click', () => show(index - 1));
+  carousel.querySelector('.carousel-next')?.addEventListener('click', () => show(index + 1));
+});
+
+// Story viewer supports image/video backgrounds with readable wrapped text overlays.
+const storyViewer = document.getElementById('story-viewer');
+if (storyViewer) {
+  const mediaSlot = storyViewer.querySelector('.story-viewer-media');
+  const textSlot = storyViewer.querySelector('.story-viewer-text');
+  document.querySelectorAll('.story-bubble').forEach(bubble => bubble.addEventListener('click', () => {
+    mediaSlot.replaceChildren();
+    const type = bubble.dataset.storyType;
+    const media = document.createElement(type === 'video' ? 'video' : 'img');
+    media.src = bubble.dataset.storyMedia;
+    if (type === 'video') { media.controls = true; media.autoplay = true; media.playsInline = true; }
+    else media.alt = 'Instagram Story';
+    mediaSlot.appendChild(media);
+    textSlot.textContent = bubble.dataset.storyText || '';
+    textSlot.style.color = bubble.dataset.storyColor || '#fff';
+    textSlot.hidden = !textSlot.textContent;
+    storyViewer.hidden = false;
+  }));
+  storyViewer.querySelector('.story-close').addEventListener('click', () => {
+    const video = mediaSlot.querySelector('video'); if (video) video.pause();
+    storyViewer.hidden = true; mediaSlot.replaceChildren();
+  });
+  storyViewer.addEventListener('click', e => { if (e.target === storyViewer) storyViewer.querySelector('.story-close').click(); });
+}
