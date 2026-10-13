@@ -527,3 +527,325 @@
 }
 .delete-post-button:hover { color: #ed4956 !important; }
 .delete-post-button:disabled { opacity: .6; cursor: wait; }
+
+/* OC Socials — Instagram Stories layout, matched to the supplied mockup.
+   Append this file's contents to the END of static/style.css. */
+
+.story-strip {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 18px 0 24px;
+  padding: 18px 20px 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e9e4ea;
+  border-radius: 18px;
+}
+
+.story-strip h2 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.story-list {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  padding: 3px 2px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.story-bubble {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 76px;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 76px;
+  min-width: 76px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  color: #262326;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.story-bubble img {
+  box-sizing: border-box;
+  display: block;
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  padding: 3px;
+  object-fit: cover;
+  background: #fff;
+  border: 3px solid #d62976;
+  border-radius: 50%;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+
+.story-bubble span {
+  display: block;
+  width: 100%;
+  max-width: 76px;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-bubble:hover img,
+.story-bubble:focus-visible img {
+  transform: scale(1.04);
+  border-color: #962fbf;
+}
+
+.story-bubble:focus-visible {
+  outline: 2px solid #962fbf;
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+/* Fullscreen dimmer behind a centered 9:16 Story, like the supplied reference. */
+.story-viewer {
+  position: fixed;
+  z-index: 2000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: hidden;
+  background: rgba(10, 8, 12, 0.92);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.story-viewer[hidden] {
+  display: none !important;
+}
+
+/* Fixed portrait frame: the Story's image/video fills the grey placeholder area. */
+.story-viewer-media {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  height: min(88vh, 740px, calc((100vw - 24px) * 16 / 9));
+  aspect-ratio: 9 / 16;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  isolation: isolate;
+  background: #151515;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.story-viewer-media > img,
+.story-viewer-media > video {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  background: #111;
+}
+
+/* Gentle top/bottom fades keep white Story UI readable over any photo. */
+.story-viewer-media::before,
+.story-viewer-media::after {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.story-viewer-media::before {
+  top: 0;
+  height: 126px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.58), transparent);
+}
+
+.story-viewer-media::after {
+  bottom: 0;
+  height: 35%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
+}
+
+.story-viewer-header {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 25px 52px 12px 13px;
+  color: #fff;
+  font-size: 0.82rem;
+  line-height: 1.15;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+.story-viewer-header::before {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  content: "";
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 10px;
+}
+
+.story-viewer-avatar {
+  display: block;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+}
+
+.story-viewer-author {
+  max-width: 58%;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-viewer-meta {
+  margin-left: auto;
+  opacity: 0.8;
+  font-size: 0.72rem;
+}
+
+/* The creator's Story caption is rendered ON TOP of the photo/video. */
+.story-viewer-text {
+  position: absolute;
+  z-index: 4;
+  right: 16px;
+  bottom: 22px;
+  left: 16px;
+  box-sizing: border-box;
+  width: auto;
+  max-height: 42%;
+  margin: 0;
+  padding: 4px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8);
+  background: transparent;
+  border-radius: 0;
+  transform: none;
+  scrollbar-width: thin;
+}
+
+.story-viewer-text[hidden] {
+  display: none !important;
+}
+
+.story-viewer .story-close {
+  position: absolute;
+  z-index: 6;
+  top: 23px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  color: #fff;
+  font-size: 1.85rem;
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.story-viewer .story-close:hover {
+  background: rgba(0, 0, 0, 0.24);
+}
+
+@media (max-width: 600px) {
+  .story-strip {
+    margin: 14px 0 18px;
+    padding: 15px 13px 10px;
+    border-radius: 15px;
+  }
+
+  .story-list {
+    gap: 12px;
+  }
+
+  .story-bubble {
+    flex-basis: 70px;
+    width: 70px;
+    min-width: 70px;
+  }
+
+  .story-bubble img {
+    width: 60px;
+    height: 60px;
+    flex-basis: 60px;
+  }
+
+  .story-viewer {
+    padding: 8px;
+  }
+
+  .story-viewer-media {
+    height: min(88vh, 740px, calc((100vw - 16px) * 16 / 9));
+    max-width: calc(100vw - 16px);
+    border-radius: 14px;
+  }
+
+  .story-viewer-text {
+    right: 13px;
+    bottom: 18px;
+    left: 13px;
+    font-size: 0.96rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-bubble img { transition: none; }
+}
