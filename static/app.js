@@ -279,3 +279,44 @@ if (storyViewer) {
   });
   storyViewer.addEventListener('click', e => { if (e.target === storyViewer) storyViewer.querySelector('.story-close').click(); });
 }
+
+// Instagram Stories viewer chrome: keep the image full-bleed and overlay
+// the Story author + uploaded text directly on top of the media.
+(() => {
+  const viewer = document.getElementById("story-viewer");
+  if (!viewer) return;
+  const mediaSlot = viewer.querySelector(".story-viewer-media");
+  const textSlot = viewer.querySelector(".story-viewer-text");
+  const closeButton = viewer.querySelector(".story-close");
+  if (!mediaSlot || !textSlot || !closeButton) return;
+
+  document.querySelectorAll(".story-bubble").forEach((bubble) => {
+    // The existing Story click handler runs first and swaps in the image/video.
+    bubble.addEventListener("click", () => {
+      mediaSlot.classList.add("story-frame");
+
+      // Put the caption and close control inside the portrait media frame,
+      // rather than positioning them against the whole browser window.
+      if (textSlot.parentElement !== mediaSlot) mediaSlot.appendChild(textSlot);
+      if (closeButton.parentElement !== mediaSlot) mediaSlot.appendChild(closeButton);
+
+      let header = mediaSlot.querySelector(".story-viewer-header");
+      if (!header) {
+        header = document.createElement("div");
+        header.className = "story-viewer-header";
+        header.innerHTML = '<img class="story-viewer-avatar" alt=""><span class="story-viewer-author"></span><span class="story-viewer-meta">Story</span>';
+        mediaSlot.appendChild(header);
+      }
+
+      const avatar = bubble.querySelector("img");
+      const username = bubble.querySelector("span");
+      const headerAvatar = header.querySelector(".story-viewer-avatar");
+      if (headerAvatar) {
+        headerAvatar.src = avatar ? (avatar.currentSrc || avatar.src) : "";
+        headerAvatar.alt = username ? username.textContent.trim() : "";
+      }
+      const author = header.querySelector(".story-viewer-author");
+      if (author) author.textContent = username ? username.textContent.trim() : "Instagram Story";
+    });
+  });
+})();
