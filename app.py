@@ -25,6 +25,8 @@ except ImportError:
     requests = None
 
 app = Flask(__name__)
+# Allow larger multi-photo/video uploads while still imposing a firm request limit.
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 app.secret_key = os.environ.get("FLASK_SECRET", "change-this-in-production")
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "social_apps.db")
 
@@ -179,13 +181,30 @@ def init():
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
             ).fetchall()
         }
-        c.close()
         missing = sorted(required - existing)
         if missing:
+            c.close()
             raise RuntimeError(
                 "Supabase database is missing tables: " + ", ".join(missing)
                 + ". Do not set DATABASE_URL on Render until the Supabase schema is complete."
             )
+        # Safe additive schema for Instagram media carousels and Stories.
+        c.execute("""CREATE TABLE IF NOT EXISTS post_media (
+            id BIGSERIAL PRIMARY KEY, post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+            media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', position INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS stories (
+            id BIGSERIAL PRIMARY KEY, oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+            media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', text_overlay TEXT DEFAULT '',
+            text_color TEXT DEFAULT '#ffffff', text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP NOT NULL)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS oc_post_likes (
+            post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+            oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(post_id, oc_id))""")
+        c.commit()
+        c.close()
         return
     c = conn()
     c.execute("CREATE TABLE IF NOT EXISTS login_codes (code TEXT PRIMARY KEY, discord_id INTEGER NOT NULL, expires_at INTEGER NOT NULL)")
@@ -221,6 +240,25 @@ def init():
       text TEXT DEFAULT '',
       image TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS post_media(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      media_url TEXT NOT NULL,
+      media_type TEXT NOT NULL DEFAULT 'image',
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS stories(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      oc_id INTEGER NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+      media_url TEXT NOT NULL,
+      media_type TEXT NOT NULL DEFAULT 'image',
+      text_overlay TEXT DEFAULT '',
+      text_color TEXT DEFAULT '#ffffff',
+      text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL
     );
     CREATE TABLE IF NOT EXISTS discord_outbox(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -281,6 +319,12 @@ def init():
     );
     """)
     c.execute("""CREATE TABLE IF NOT EXISTS oc_tweet_likes (
+        post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, oc_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS oc_post_likes (
         post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
         oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -575,17 +619,30 @@ def logout():
 @app.route("/instagram")
 @login_required
 def instagram():
+    user = current_user()
     c = conn()
+    owned_ocs = c.execute(
+        "SELECT id, name, username FROM ocs WHERE owner_id=? ORDER BY name",
+        (user["id"],)
+    ).fetchall()
+    owned_ids = {int(oc["id"]) for oc in owned_ocs}
+    requested_oc_id = request.args.get("oc_id", type=int)
+    if requested_oc_id in owned_ids:
+        active_oc_id = requested_oc_id
+    else:
+        active_oc_id = int(owned_ocs[0]["id"]) if owned_ocs else None
+
     posts = c.execute("""
         SELECT p.*, o.name, o.username, o.avatar, o.id AS author_oc_id, o.owner_id AS author_owner_id,
-               (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS like_count,
+               ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) +
+                (SELECT COUNT(*) FROM oc_post_likes ol WHERE ol.post_id=p.id)) AS like_count,
                EXISTS(
-                   SELECT 1 FROM post_likes l
-                   WHERE l.post_id=p.id AND l.user_id=?
+                   SELECT 1 FROM oc_post_likes ol
+                   WHERE ol.post_id=p.id AND ol.oc_id=?
                ) AS liked_by_me
         FROM posts p JOIN ocs o ON o.id=p.oc_id
         WHERE p.platform='instagram' ORDER BY p.id DESC
-    """, (current_user()["id"],)).fetchall()
+    """, (active_oc_id,)).fetchall()
     replies = c.execute("""
       SELECT r.*, o.name, o.username, o.avatar,
              (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
@@ -596,8 +653,71 @@ def instagram():
       FROM replies r JOIN ocs o ON o.id=r.oc_id
       ORDER BY r.id
     """, (current_user()["id"],)).fetchall()
+    # Attach carousel media while preserving legacy single-image posts.
+    post_rows = []
+    for post in posts:
+        item = dict(post)
+        media = c.execute("SELECT media_url, media_type FROM post_media WHERE post_id=? ORDER BY position, id", (post["id"],)).fetchall()
+        item["media_items"] = [dict(m) for m in media]
+        if not item["media_items"] and item.get("image"):
+            item["media_items"] = [{"media_url": item["image"], "media_type": "image"}]
+        post_rows.append(item)
+    stories = c.execute("""SELECT s.*, o.name, o.username, o.avatar, o.id AS author_oc_id
+        FROM stories s JOIN ocs o ON o.id=s.oc_id
+        WHERE s.expires_at > CURRENT_TIMESTAMP ORDER BY s.created_at DESC""").fetchall()
     c.close()
-    return render_template("instagram.html", posts=posts, replies=replies, user=current_user())
+    return render_template(
+        "instagram.html", posts=post_rows, replies=replies, stories=stories,
+        user=user, owned_ocs=owned_ocs, active_oc_id=active_oc_id
+    )
+
+
+@app.route("/api/story", methods=["POST"])
+@login_required
+def create_story():
+    try:
+        oc_id = int(request.form.get("oc_id", ""))
+    except (TypeError, ValueError):
+        return jsonify(error="Choose an OC."), 400
+    c = conn()
+    oc = c.execute("SELECT id FROM ocs WHERE id=? AND owner_id=?", (oc_id, current_user()["id"])).fetchone()
+    if not oc:
+        c.close()
+        return jsonify(error="You don't own that OC."), 403
+    uploaded = request.files.get("story_media")
+    if not uploaded or not uploaded.filename:
+        c.close()
+        return jsonify(error="Choose a photo or video for your Story."), 400
+    ext = os.path.splitext(uploaded.filename)[1].lower()
+    image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    video_exts = {".mp4", ".webm", ".mov", ".m4v"}
+    if ext not in image_exts | video_exts:
+        c.close()
+        return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V."), 400
+    uploaded.stream.seek(0, 2)
+    size = uploaded.stream.tell()
+    uploaded.stream.seek(0)
+    if size > 50 * 1024 * 1024:
+        c.close()
+        return jsonify(error="Story media must be 50 MB or smaller."), 400
+    media_type = "video" if ext in video_exts else "image"
+    try:
+        media_url = store_post_photo(uploaded, f"story_{uuid.uuid4().hex}{ext}")
+    except Exception as exc:
+        c.close()
+        print(f"Story upload failed: {exc}")
+        return jsonify(error="Could not store the Story. Check Supabase Storage configuration."), 502
+    overlay = request.form.get("text_overlay", "").strip()[:500]
+    text_color = request.form.get("text_color", "#ffffff")
+    if text_color not in {"#ffffff", "#000000", "#ffcc00", "#ff5c8a", "#8be9fd"}:
+        text_color = "#ffffff"
+    # SQLite and PostgreSQL both accept this UTC timestamp format for comparison.
+    expires_at = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 86400))
+    c.execute("INSERT INTO stories(oc_id,media_url,media_type,text_overlay,text_color,expires_at) VALUES(?,?,?,?,?,?)",
+              (oc_id, media_url, media_type, overlay, text_color, expires_at))
+    c.commit()
+    c.close()
+    return redirect(url_for("instagram"))
 
 
 @app.route("/twitter")
@@ -1164,31 +1284,59 @@ def create_post():
     post_text = data.get("text","").strip()
     post_image = data.get("image","").strip()
 
-    uploaded = request.files.get("image_file")
-    if uploaded and uploaded.filename:
-        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    uploaded_items = request.files.getlist("media_files")
+    legacy_uploaded = request.files.get("image_file")
+    if legacy_uploaded and legacy_uploaded.filename and not any(x.filename for x in uploaded_items):
+        uploaded_items = [legacy_uploaded]
+    uploaded_items = [x for x in uploaded_items if x and x.filename]
+    stored_media = []
+    if platform == "twitter" and len(uploaded_items) > 1:
+        c.close()
+        return jsonify(error="Twitter/X posts currently support one media file."), 400
+    if len(uploaded_items) > 10:
+        c.close()
+        return jsonify(error="Choose up to 10 photos/videos per post."), 400
+    allowed_images = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    allowed_videos = {".mp4", ".webm", ".mov", ".m4v"}
+    for uploaded in uploaded_items:
         ext = os.path.splitext(uploaded.filename)[1].lower()
-
-        if ext not in allowed:
+        if ext not in allowed_images | allowed_videos:
             c.close()
-            return jsonify(error="Please upload a JPG, PNG, WEBP, or GIF image."), 400
-
+            return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V files."), 400
+        if platform == "twitter" and ext in allowed_videos:
+            # Video support requested specifically for Instagram; avoid changing Twitter behaviour unexpectedly.
+            c.close()
+            return jsonify(error="Video uploads are currently supported for Instagram posts and Stories."), 400
+        uploaded.stream.seek(0, 2)
+        size = uploaded.stream.tell()
+        uploaded.stream.seek(0)
+        if size > 50 * 1024 * 1024:
+            c.close()
+            return jsonify(error="Each media file must be 50 MB or smaller."), 400
         filename = f"{uuid.uuid4().hex}{ext}"
         try:
-            post_image = store_post_photo(uploaded, filename)
+            media_url = store_post_photo(uploaded, filename)
         except Exception as exc:
             c.close()
-            print(f"Post image upload failed: {exc}")
-            return jsonify(error="Could not store the uploaded photo. Check the server's Supabase Storage configuration."), 502
+            print(f"Post media upload failed: {exc}")
+            return jsonify(error="Could not store the uploaded media. Check the server's Supabase Storage configuration."), 502
+        media_type = "video" if ext in allowed_videos else "image"
+        stored_media.append((media_url, media_type))
+    if stored_media:
+        post_image = stored_media[0][0]
 
     c.execute("INSERT INTO posts(oc_id,platform,text,image) VALUES(?,?,?,?)",
               (oc_id, platform, post_text, post_image))
+    post_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+    for position, (media_url, media_type) in enumerate(stored_media):
+        c.execute("INSERT INTO post_media(post_id,media_url,media_type,position) VALUES(?,?,?,?)",
+                  (post_id, media_url, media_type, position))
     c.commit()
 
     import json
 
     payload = {
-        "post_id": c.execute("SELECT last_insert_rowid()").fetchone()[0],
+        "post_id": post_id,
         "oc_id": oc["id"],
         "oc_name": oc["name"],
         "username": oc["username"],
@@ -1273,8 +1421,43 @@ def api_like():
         c.close()
         return jsonify(error="Post not found"), 404
 
-    # Twitter actions belong to the selected OC. Instagram keeps its existing
-    # Discord-account-level like behavior until its own OC-specific migration.
+    # Likes are performed by an OC on both platforms; keep Twitter's existing table.
+    if post["platform"] == "instagram":
+        try:
+            oc_id = int(data.get("oc_id"))
+        except (TypeError, ValueError):
+            c.close()
+            return jsonify(error="Choose which OC is liking this post"), 400
+        actor = c.execute(
+            "SELECT id FROM ocs WHERE id=? AND owner_id=?", (oc_id, user["id"])
+        ).fetchone()
+        if not actor:
+            c.close()
+            return jsonify(error="You can only like posts as one of your own OCs"), 403
+        existing = c.execute(
+            "SELECT 1 FROM oc_post_likes WHERE post_id=? AND oc_id=?",
+            (post_id, oc_id)
+        ).fetchone()
+        if existing:
+            c.execute(
+                "DELETE FROM oc_post_likes WHERE post_id=? AND oc_id=?",
+                (post_id, oc_id)
+            )
+            liked = False
+        else:
+            c.execute(
+                "INSERT OR IGNORE INTO oc_post_likes(post_id, oc_id) VALUES(?, ?)",
+                (post_id, oc_id)
+            )
+            liked = True
+        c.commit()
+        count = (
+            c.execute("SELECT COUNT(*) FROM post_likes WHERE post_id=?", (post_id,)).fetchone()[0]
+            + c.execute("SELECT COUNT(*) FROM oc_post_likes WHERE post_id=?", (post_id,)).fetchone()[0]
+        )
+        c.close()
+        return jsonify(ok=True, liked=liked, count=count, actor_oc_id=oc_id)
+
     if post["platform"] == "twitter":
         try:
             oc_id = int(data.get("oc_id"))
