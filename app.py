@@ -1,4 +1,5 @@
 import os
+import json
 import io
 import tempfile
 import zipfile
@@ -203,6 +204,11 @@ def init():
             oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(post_id, oc_id))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS chat_reads (
+            user_id BIGINT NOT NULL,
+            chat_id BIGINT NOT NULL,
+            last_read_message_id BIGINT NOT NULL DEFAULT 0,
+            UNIQUE(user_id, chat_id))""")
         c.commit()
         c.close()
         return
@@ -316,6 +322,12 @@ def init():
       text TEXT NOT NULL,
       image TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS chat_reads(
+      user_id INTEGER NOT NULL,
+      chat_id INTEGER NOT NULL,
+      last_read_message_id INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(user_id, chat_id)
     );
     """)
     c.execute("""CREATE TABLE IF NOT EXISTS oc_tweet_likes (
@@ -852,16 +864,26 @@ def twitter_profile(oc_id):
 @login_required
 def messages():
     c = conn()
-    user_id = current_user()["id"]
+    user = current_user()
+    user_id = user["id"]
     chats = c.execute("""
-      SELECT DISTINCT c.*
+      SELECT DISTINCT c.*,
+        (SELECT COUNT(*)
+         FROM messages m
+         JOIN ocs sender_oc ON sender_oc.id=m.oc_id
+         WHERE m.chat_id=c.id
+           AND m.id > COALESCE(
+             (SELECT cr.last_read_message_id FROM chat_reads cr
+              WHERE cr.user_id=? AND cr.chat_id=c.id), 0)
+           AND sender_oc.owner_id<>?) AS unread_count
       FROM chats c
       JOIN chat_users cu ON cu.chat_id=c.id
       WHERE cu.user_id=?
       ORDER BY c.id DESC
-    """, (user_id,)).fetchall()
+    """, (user_id, user_id, user_id)).fetchall()
+    total_unread = sum(int(chat["unread_count"] or 0) for chat in chats)
     c.close()
-    return render_template("messages.html", chats=chats, user=current_user())
+    return render_template("messages.html", chats=chats, total_unread=total_unread, user=user)
 
 
 @app.route("/chat/new", methods=["GET", "POST"])
@@ -1063,17 +1085,41 @@ def chat(chat_id):
     if not allowed:
         c.close()
         return "You are not a member of this chat.", 403
+    user = current_user()
     msgs = c.execute("""
-      SELECT m.*, o.name, o.username, o.avatar
+      SELECT m.*, o.name, o.username, o.avatar, o.owner_id
       FROM messages m JOIN ocs o ON o.id=m.oc_id
       WHERE m.chat_id=? ORDER BY m.id
     """, (chat_id,)).fetchall()
-    mine = [m for m in members if m["owner_id"] == current_user()["id"]]
+    # Opening a conversation marks all messages currently in it as read for this user.
+    if msgs:
+        last_read_id = max(int(msg["id"]) for msg in msgs)
+        c.execute("""
+          INSERT INTO chat_reads(user_id, chat_id, last_read_message_id)
+          VALUES(?,?,?)
+          ON CONFLICT(user_id, chat_id) DO UPDATE
+          SET last_read_message_id=excluded.last_read_message_id
+        """, (user["id"], chat_id, last_read_id))
+        c.commit()
+    mine = [m for m in members if m["owner_id"] == user["id"]]
     all_ocs = c.execute(
         "SELECT id, name, username, avatar, owner_id FROM ocs ORDER BY name"
     ).fetchall()
+    unread_total_row = c.execute("""
+      SELECT COUNT(*) AS total
+      FROM messages m
+      JOIN chats ch ON ch.id=m.chat_id
+      JOIN chat_users cu ON cu.chat_id=ch.id AND cu.user_id=?
+      JOIN ocs sender_oc ON sender_oc.id=m.oc_id
+      LEFT JOIN chat_reads cr ON cr.chat_id=m.chat_id AND cr.user_id=cu.user_id
+      WHERE m.id > COALESCE(cr.last_read_message_id, 0)
+        AND sender_oc.owner_id<>?
+    """, (user["id"], user["id"])).fetchone()
+    total_unread = int(unread_total_row["total"] or 0)
     c.close()
-    return render_template("chat.html", chat=chat_row, members=members, mine=mine, messages=msgs, user=current_user(), all_ocs=all_ocs)
+    return render_template("chat.html", chat=chat_row, members=members, mine=mine,
+                           messages=msgs, user=user, all_ocs=all_ocs,
+                           total_unread=total_unread)
 
 
 @app.route("/oc/new", methods=["GET", "POST"])
@@ -1620,8 +1666,32 @@ def message():
     if not member:
         c.close()
         return jsonify(error="That OC is not one of your OCs in this chat"), 403
+    image = str(data.get("image", "") or "").strip()
     c.execute("INSERT INTO messages(chat_id,oc_id,text,image) VALUES(?,?,?,?)",
-              (chat_id, oc_id, text, data.get("image","").strip()))
+              (chat_id, oc_id, text, image))
+    message_id = int(c.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+    # Notify every other Discord account in this conversation (direct and group chats).
+    chat_row = c.execute("SELECT id, name FROM chats WHERE id=?", (chat_id,)).fetchone()
+    recipients = c.execute("""
+      SELECT DISTINCT user_id FROM chat_users
+      WHERE chat_id=? AND user_id<>?
+    """, (chat_id, current_user()["id"])).fetchall()
+    recipient_ids = [int(row["user_id"]) for row in recipients]
+    if recipient_ids:
+        payload = {
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "chat_name": str(chat_row["name"] if chat_row else "iMessage"),
+            "recipient_discord_ids": recipient_ids,
+            "sender_oc_name": str(member["name"]),
+            "sender_username": str(member["username"]),
+            "sender_avatar": str(member["avatar"] or ""),
+            "text": text[:1000],
+            "image": image,
+        }
+        c.execute("INSERT INTO discord_outbox(event_type, payload) VALUES(?, ?)",
+                  ("message", json.dumps(payload)))
     c.commit()
     c.close()
     return jsonify(ok=True)
