@@ -18,7 +18,7 @@
 
 <main>
   <section class="card">
-    <h1>iMessage</h1>
+    <h1>iMessage{% if total_unread %} <span style="display:inline-block;vertical-align:middle;padding:.18rem .58rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.75rem;font-weight:700;">{{ total_unread }} unread</span>{% endif %}</h1>
 
     <div class="chat-actions">
       <a class="button" href="/chat/new?type=direct">💬 New 1-on-1 Chat</a>
@@ -30,6 +30,7 @@
     {% for c in chats %}
       <a class="chat-link" href="/chat/{{c['id']}}">
         <b>{{c['name']}}</b>
+        {% if c['unread_count'] %}<span aria-label="{{ c['unread_count'] }} unread messages" style="display:inline-block;margin-left:.45rem;padding:.14rem .5rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.75rem;font-weight:700;">{{ c['unread_count'] }} new</span>{% endif %}
         <small>Open conversation →</small>
       </a>
     {% else %}

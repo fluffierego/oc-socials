@@ -10,7 +10,7 @@
   <section class="imessage-shell">
 
     <header class="imessage-header">
-      <a href="/messages">← Chats</a>
+      <a href="/messages">← Chats{% if total_unread %} <span aria-label="{{ total_unread }} unread messages" style="display:inline-block;margin-left:.25rem;padding:.12rem .45rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.72rem;font-weight:700;">{{ total_unread }}</span>{% endif %}</a>
 
       {% if members %}
         {% set first = members[0] %}
