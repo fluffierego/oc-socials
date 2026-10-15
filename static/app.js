@@ -1,14 +1,44 @@
 document.querySelectorAll(".reply-form").forEach(form => {
+  const fileInput = form.querySelector('input[name="media_file"]');
+  const urlInput = form.querySelector('input[name="media_url"]');
+  const fileName = form.querySelector('.comment-file-name');
+  if (fileInput) fileInput.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files.length) {
+      if (urlInput) urlInput.value = '';
+      if (fileName) fileName.textContent = fileInput.files[0].name;
+    } else if (fileName) {
+      fileName.textContent = '';
+    }
+  });
+  if (urlInput) urlInput.addEventListener('input', () => {
+    if (urlInput.value.trim() && fileInput) fileInput.value = '';
+    if (fileName && urlInput.value.trim()) fileName.textContent = 'Using direct media URL';
+    else if (fileName && (!fileInput || !fileInput.files || !fileInput.files.length)) fileName.textContent = '';
+  });
   form.addEventListener("submit", async e => {
     e.preventDefault();
     const fd = new FormData(form);
-    const res = await fetch("/api/reply", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({post_id:form.dataset.post, oc_id:fd.get("oc_id"), text:fd.get("text"), parent_id:fd.get("parent_id") || null})
-    });
-    if(res.ok) location.reload();
-    else alert((await res.json()).error || "Could not reply.");
+    fd.set("post_id", form.dataset.post || fd.get("post_id") || "");
+    const text = (fd.get("text") || "").trim();
+    const file = fd.get("media_file");
+    const mediaUrl = (fd.get("media_url") || "").trim();
+    if (!text && !(file instanceof File && file.name) && !mediaUrl) {
+      alert("Write a comment or attach a photo/GIF first.");
+      return;
+    }
+    const submitButton = form.querySelector('button[type="submit"],button:not([type])');
+    if (submitButton) submitButton.disabled = true;
+    try {
+      const res = await fetch("/api/reply", { method: "POST", body: fd });
+      let data = {};
+      try { data = await res.json(); } catch (_) { data = {}; }
+      if (res.ok) location.reload();
+      else alert(data.error || "Could not reply. Please try again.");
+    } catch (error) {
+      alert(error.message || "Could not send the comment.");
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
   });
 });
 const mf=document.getElementById("message-form");
@@ -279,44 +309,3 @@ if (storyViewer) {
   });
   storyViewer.addEventListener('click', e => { if (e.target === storyViewer) storyViewer.querySelector('.story-close').click(); });
 }
-
-// Instagram Stories viewer chrome: keep the image full-bleed and overlay
-// the Story author + uploaded text directly on top of the media.
-(() => {
-  const viewer = document.getElementById("story-viewer");
-  if (!viewer) return;
-  const mediaSlot = viewer.querySelector(".story-viewer-media");
-  const textSlot = viewer.querySelector(".story-viewer-text");
-  const closeButton = viewer.querySelector(".story-close");
-  if (!mediaSlot || !textSlot || !closeButton) return;
-
-  document.querySelectorAll(".story-bubble").forEach((bubble) => {
-    // The existing Story click handler runs first and swaps in the image/video.
-    bubble.addEventListener("click", () => {
-      mediaSlot.classList.add("story-frame");
-
-      // Put the caption and close control inside the portrait media frame,
-      // rather than positioning them against the whole browser window.
-      if (textSlot.parentElement !== mediaSlot) mediaSlot.appendChild(textSlot);
-      if (closeButton.parentElement !== mediaSlot) mediaSlot.appendChild(closeButton);
-
-      let header = mediaSlot.querySelector(".story-viewer-header");
-      if (!header) {
-        header = document.createElement("div");
-        header.className = "story-viewer-header";
-        header.innerHTML = '<img class="story-viewer-avatar" alt=""><span class="story-viewer-author"></span><span class="story-viewer-meta">Story</span>';
-        mediaSlot.appendChild(header);
-      }
-
-      const avatar = bubble.querySelector("img");
-      const username = bubble.querySelector("span");
-      const headerAvatar = header.querySelector(".story-viewer-avatar");
-      if (headerAvatar) {
-        headerAvatar.src = avatar ? (avatar.currentSrc || avatar.src) : "";
-        headerAvatar.alt = username ? username.textContent.trim() : "";
-      }
-      const author = header.querySelector(".story-viewer-author");
-      if (author) author.textContent = username ? username.textContent.trim() : "Instagram Story";
-    });
-  });
-})();
