@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{oc['name']}} (@{{oc['username']}}) • Instagram • OC Socials</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .ig-profile-banner-wrap { width: 100%; margin: 0 auto 12px; overflow: hidden; border-radius: 8px; background: #e9e9e9; }
+    .ig-profile-banner { display: block; width: 100%; height: clamp(140px, 24vw, 230px); object-fit: cover; object-position: center; }
+    @media (max-width: 600px) { .ig-profile-banner-wrap { border-radius: 0; margin-bottom: 8px; } .ig-profile-banner { height: 140px; } }
+  </style>
 </head>
 <body>
   <nav class="topnav">
@@ -12,6 +17,11 @@
     <span><a href="{{ url_for('home') }}">Home</a><a href="{{ url_for('instagram') }}">Instagram</a><a href="{{ url_for('twitter') }}">Twitter/X</a><a href="{{ url_for('messages') }}">iMessage</a></span>
   </nav>
   <main class="ig-profile-page">
+    {% if oc['banner'] %}
+      <div class="ig-profile-banner-wrap">
+        <img class="ig-profile-banner" src="{{oc['banner']}}" alt="{{oc['name']}} Instagram banner">
+      </div>
+    {% endif %}
     <section class="ig-profile-header">
       <div class="ig-profile-avatar-wrap">
         {% if oc['avatar'] %}<img class="ig-profile-avatar" src="{{oc['avatar']}}" alt="{{oc['name']}} profile picture">{% else %}<div class="ig-profile-avatar ig-profile-avatar-fallback">{{oc['name'][:1]}}</div>{% endif %}
