@@ -179,7 +179,7 @@
         const url = new URL(value, window.location.origin);
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid URL');
         area.classList.add('wallpaper-custom');
-        area.style.backgroundImage = 'linear-gradient(rgba(0,0,0,.44), rgba(0,0,0,.52)), url("' + url.href + '")';
+        area.style.backgroundImage = 'linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.22)), url("' + url.href + '")';
         area.style.backgroundSize = 'cover';
         area.style.backgroundPosition = 'center';
       } catch (_) {
