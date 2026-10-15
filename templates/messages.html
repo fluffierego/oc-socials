@@ -1,42 +1,50 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <title>iMessage</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Messages · OC Socials</title>
+  <style>
+    :root{color-scheme:dark;--bg:#000;--panel:#111113;--line:#29292e;--muted:#98989f;--green:#248a3d;--blue:#0a84ff;--badge:#ff453a}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+    body{min-height:100dvh}.page{width:100%;max-width:760px;min-height:100dvh;margin:0 auto;background:#000;border-left:1px solid #171719;border-right:1px solid #171719;display:flex;flex-direction:column}
+    .top{position:sticky;top:0;z-index:5;padding:calc(14px + env(safe-area-inset-top)) 18px 15px;background:rgba(8,8,9,.94);backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
+    .navline{display:flex;align-items:center;justify-content:space-between;gap:12px}.navline a{color:var(--blue);text-decoration:none;font-size:15px}.top h1{font-size:32px;line-height:1.1;margin:16px 0 4px;font-weight:750;letter-spacing:-.7px}.subtitle{color:var(--muted);font-size:13px}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:15px}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #343439;border-radius:999px;padding:9px 13px;color:#f5f5f7;text-decoration:none;font-size:13px;background:#171719}.pill.primary{background:#123f26;border-color:#22643a;color:#a4f0b7}
+    .conversation-list{padding:0 15px 28px}.conversation{display:flex;align-items:center;gap:13px;text-decoration:none;color:inherit;min-height:86px;padding:13px 3px;border-bottom:1px solid #27272b}.avatar{position:relative;width:53px;height:53px;border-radius:50%;display:flex;flex-shrink:0;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(145deg,#46464f,#222227);color:#fff;font-size:21px;font-weight:650}.avatar img{width:100%;height:100%;object-fit:cover}.conversation-main{flex:1;min-width:0}.conv-title{font-size:16px;font-weight:650;display:flex;align-items:center;gap:7px}.conv-preview{margin-top:5px;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chevron{color:#77777e;font-size:24px;font-weight:300}.unread{background:var(--badge);color:#fff;border-radius:999px;font-size:11px;font-weight:750;padding:3px 7px;white-space:nowrap}.empty{margin:45px 6px;color:var(--muted);text-align:center;font-size:14px}.footer-links{display:flex;gap:17px;justify-content:center;padding:18px;font-size:12px}.footer-links a{color:var(--muted);text-decoration:none}
+    @media(min-width:800px){body{background:#121214}.page{box-shadow:0 0 50px #000;border-radius:0}}
+  </style>
 </head>
 <body>
-<nav>
-  <b>iMessage</b>
-  <span>
-    <a href="/">Home</a>
-    <a href="/instagram">Instagram</a>
-    <a href="/twitter">Twitter/X</a>
-    <a href="/chat/new?type=direct">+ New Chat</a>
-    <a href="/chat/new?type=group">+ Group Chat</a>
-  </span>
-</nav>
-
-<main>
-  <section class="card">
-    <h1>iMessage{% if total_unread %} <span style="display:inline-block;vertical-align:middle;padding:.18rem .58rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.75rem;font-weight:700;">{{ total_unread }} unread</span>{% endif %}</h1>
-
-    <div class="chat-actions">
-      <a class="button" href="/chat/new?type=direct">💬 New 1-on-1 Chat</a>
-      <a class="button" href="/chat/new?type=group">👥 New Group Chat</a>
+<div class="page">
+  <header class="top">
+    <div class="navline">
+      <a href="/">‹ Home</a>
+      <a href="/messages" aria-label="Refresh messages">Edit</a>
     </div>
-
-    <h2>Your conversations</h2>
-
+    <h1>Messages{% if total_unread %} <span class="unread" style="vertical-align:middle">{{ total_unread }}</span>{% endif %}</h1>
+    <div class="subtitle">iMessage-style conversations for your OCs</div>
+    <div class="actions">
+      <a class="pill primary" href="/chat/new?type=direct">＋ New Message</a>
+      <a class="pill" href="/chat/new?type=group">＋ Group Chat</a>
+    </div>
+  </header>
+  <section class="conversation-list" aria-label="Your conversations">
     {% for c in chats %}
-      <a class="chat-link" href="/chat/{{c['id']}}">
-        <b>{{c['name']}}</b>
-        {% if c['unread_count'] %}<span aria-label="{{ c['unread_count'] }} unread messages" style="display:inline-block;margin-left:.45rem;padding:.14rem .5rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.75rem;font-weight:700;">{{ c['unread_count'] }} new</span>{% endif %}
-        <small>Open conversation →</small>
+      <a class="conversation" href="/chat/{{ c['id'] }}">
+        <div class="avatar">{{ c['name'][:1]|upper }}{% if c['unread_count'] %}<span class="unread" style="position:absolute;transform:translate(19px,-19px)">{{ c['unread_count'] }}</span>{% endif %}</div>
+        <div class="conversation-main">
+          <div class="conv-title">{{ c['name'] }}{% if c['unread_count'] %}<span class="unread">{{ c['unread_count'] }} new</span>{% endif %}</div>
+          <div class="conv-preview">Tap to open conversation</div>
+        </div>
+        <span class="chevron" aria-hidden="true">›</span>
       </a>
     {% else %}
-      <p>No conversations yet.</p>
+      <p class="empty">No conversations yet.<br>Start a new message to begin chatting.</p>
     {% endfor %}
   </section>
-</main>
+  <footer class="footer-links"><a href="/instagram">Instagram</a><a href="/twitter">Twitter/X</a><a href="/">Home</a></footer>
+</div>
 </body>
 </html>

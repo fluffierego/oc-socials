@@ -1,162 +1,376 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <title>{{chat['name']}}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>{{ chat['name'] }} · Messages</title>
+  <style>
+    :root{color-scheme:dark;--black:#000;--incoming:#27272b;--outgoing:#248a3d;--blue:#0a84ff;--muted:#929298;--line:#26262b;--panel:#171719;--red:#ff453a}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+    body{min-height:100dvh}.imessage-shell{width:100%;max-width:760px;height:100dvh;min-height:560px;margin:0 auto;display:flex;flex-direction:column;background:#000;border-left:1px solid #18181b;border-right:1px solid #18181b;overflow:hidden}
+    .imessage-header{flex-shrink:0;position:relative;z-index:5;text-align:center;background:rgba(8,8,9,.94);backdrop-filter:blur(22px);border-bottom:1px solid #202024;padding:calc(10px + env(safe-area-inset-top)) 15px 12px}
+    .header-line{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;min-height:38px}.back-link{justify-self:start;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--blue);font-size:15px;white-space:nowrap}.back-circle{width:33px;height:33px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#202024;color:#f5f5f7;font-size:25px;line-height:1}.header-action{justify-self:end;color:var(--blue);border:0;background:transparent;font-size:13px;padding:8px 0;cursor:pointer}
+    .contact-avatar{margin:6px auto 3px;width:46px;height:46px;border-radius:50%;background:linear-gradient(145deg,#4f4f58,#28282e);display:flex;align-items:center;justify-content:center;overflow:hidden;font-weight:700;font-size:21px}.contact-avatar img{width:100%;height:100%;object-fit:cover}.contact-name{display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:650;padding:4px 9px;border-radius:999px;background:#19191c}.contact-name .down{color:var(--muted);font-size:16px}.contact-subtitle{font-size:11px;color:var(--muted);margin-top:5px;max-width:90%;margin-left:auto;margin-right:auto}
+    .group-members{font-size:11px;color:#77777e;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.group-members a{color:inherit;text-decoration:none;border-bottom:1px solid #55555d}
+    #add-oc-to-chat-form{margin:10px auto 0;display:flex;justify-content:center;align-items:center;gap:7px;flex-wrap:wrap;max-width:100%}#add-oc-to-chat-select{max-width:220px;min-width:0;background:#1a1a1d;color:#f5f5f7;border:1px solid #39393e;padding:7px 10px;border-radius:10px;font-size:12px}#add-oc-to-chat-form button{border:1px solid #3a3a40;background:#222226;color:#f5f5f7;border-radius:999px;padding:7px 11px;font-size:12px}#add-oc-to-chat-status{font-size:11px;color:#ffb4ae}
+    .imessage-messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 13px 20px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:#333 transparent;background:#000}
+    .date-divider{text-align:center;font-size:11px;line-height:1.4;color:#8e8e93;margin:4px 0 12px}.imessage-row{width:100%;display:flex;align-items:flex-end;gap:7px}.imessage-row.mine{justify-content:flex-end}.sender-avatar{width:27px;height:27px;flex:0 0 27px;border-radius:50%;overflow:hidden;background:#303036;color:white;font-size:12px;font-weight:650;display:flex;align-items:center;justify-content:center;margin-bottom:2px}.sender-avatar img{width:100%;height:100%;object-fit:cover}.message-content{max-width:min(78%,430px);display:flex;flex-direction:column;align-items:flex-start;min-width:0}.mine .message-content{align-items:flex-end}.imessage-name{font-size:11px;color:#b0b0b6;margin:0 0 4px 10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .imessage-bubble{position:relative;max-width:100%;background:var(--incoming);border-radius:19px;padding:9px 12px 7px;color:white;font-size:16px;line-height:1.32;overflow:hidden;overflow-wrap:anywhere;white-space:normal}.imessage-row:not(.mine) .imessage-bubble{border-bottom-left-radius:6px}.imessage-row.mine .imessage-bubble{background:var(--outgoing);border-bottom-right-radius:6px}.imessage-text{white-space:pre-wrap;overflow-wrap:anywhere}.imessage-media-link{display:block;margin:-2px -4px 5px;border-radius:14px;overflow:hidden;max-width:100%;text-decoration:none}.imessage-media{display:block;width:auto;max-width:min(100%,320px);max-height:370px;object-fit:contain;background:#161619}.imessage-bubble.media-only{padding:4px;border-radius:17px}.imessage-bubble.media-only .imessage-media-link{margin:0}.imessage-time{font-size:10px;color:#77777e;margin:4px 7px 0}.mine .imessage-time{text-align:right}.empty-chat{text-align:center;color:#85858c;margin:auto;padding:40px 18px;font-size:13px}.empty-chat strong{display:block;font-size:20px;color:#dddde2;margin-bottom:7px}
+    .composer-area{position:relative;flex-shrink:0;padding:9px 10px calc(10px + env(safe-area-inset-bottom));background:rgba(9,9,10,.97);border-top:1px solid #1b1b1e}.composer-hint{color:#66666d;text-align:center;font-size:10px;margin:7px 0 0}.composer-row{display:flex;align-items:flex-end;gap:8px}.plus-button{width:38px;height:38px;flex:0 0 38px;border:0;border-radius:50%;background:#1b1b1f;color:#e5e5e9;box-shadow:inset 0 0 0 1px #303035;font-size:30px;font-weight:300;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:1px}.compose-form{min-width:0;flex:1;display:flex;align-items:flex-end;gap:8px}.oc-picker{max-width:112px;min-width:72px;border:0;outline:0;background:transparent;color:#aaaab1;font-size:11px;align-self:center;text-overflow:ellipsis}.text-entry-shell{flex:1;min-width:0;border:1px solid #38383e;border-radius:22px;background:#19191d;display:flex;align-items:flex-end;padding:4px 5px 4px 13px;gap:5px;box-shadow:0 1px 1px #000}.message-text{flex:1;min-width:0;max-height:112px;resize:none;border:0;outline:0;background:transparent;color:white;font:inherit;font-size:16px;line-height:1.3;padding:7px 0;min-height:34px;overflow-y:auto}.message-text::placeholder{color:#7c7c83}.send-button{flex:0 0 27px;width:27px;height:27px;border:0;border-radius:50%;background:#248a3d;color:white;font-size:19px;font-weight:750;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:0}.send-button:disabled{opacity:.5}.upload-preview{display:flex;align-items:center;gap:8px;border:1px solid #35353a;border-radius:13px;background:#161619;padding:7px 10px;margin:0 0 8px 47px;font-size:12px;color:#ceced3}.preview-thumb{width:30px;height:30px;border-radius:7px;object-fit:cover;background:#2a2a30}.remove-attachment{margin-left:auto;border:0;color:#e7e7eb;background:#333338;width:23px;height:23px;border-radius:50%;font-size:15px;cursor:pointer}
+    .attachment-menu{position:absolute;bottom:calc(100% + 7px);left:10px;width:min(285px,calc(100vw - 30px));background:rgba(31,31,35,.98);border:1px solid #47474e;border-radius:20px;padding:8px;box-shadow:0 12px 45px #000b;z-index:10;backdrop-filter:blur(24px)}.attachment-menu[hidden],.gif-panel[hidden],.upload-preview[hidden]{display:none}.attachment-option{width:100%;display:flex;align-items:center;gap:12px;padding:11px 10px;border:0;background:transparent;color:#f5f5f7;text-align:left;font-size:14px;border-radius:12px;cursor:pointer}.attachment-option:hover{background:#3a3a40}.option-icon{width:34px;height:34px;border-radius:10px;background:#34343b;display:flex;align-items:center;justify-content:center;font-size:19px;flex:0 0 34px}.option-copy{display:flex;flex-direction:column;gap:3px}.option-title{font-weight:600}.option-hint{font-size:11px;color:#9c9ca4}.gif-panel{margin:8px 0 0 47px;padding:10px;background:#17171a;border:1px solid #333338;border-radius:15px}.gif-panel label{font-size:12px;color:#b5b5bc;display:block;margin-bottom:7px}.gif-url-row{display:flex;gap:6px}.gif-url-row input{min-width:0;flex:1;background:#080809;border:1px solid #44444a;color:white;border-radius:9px;padding:9px;font-size:12px}.gif-url-row button{border:0;background:#248a3d;color:#fff;border-radius:9px;padding:0 11px;font-weight:650}.upload-status{font-size:11px;color:#ffb4ae;margin:6px 0 0 48px;min-height:14px}.hidden-input{display:none}
+    @media(min-width:700px){.imessage-shell{height:calc(100dvh - 32px);min-height:640px;margin:16px auto;border:1px solid #303035;border-radius:24px;box-shadow:0 25px 90px #0008}.imessage-header{border-radius:24px 24px 0 0}.composer-area{border-radius:0 0 24px 24px}.imessage-messages{padding-left:22px;padding-right:22px}}
+    @media(max-width:430px){.message-content{max-width:83%}.imessage-header{padding-left:10px;padding-right:10px}.oc-picker{max-width:88px}.imessage-bubble{font-size:15.5px}.imessage-media{max-width:260px;max-height:340px}}
+
+    .wallpaper-control-row{margin:8px auto 0;display:flex;justify-content:center}.wallpaper-open{border:1px solid #34343a;background:#17171b;color:#d9e8ff;border-radius:999px;padding:6px 12px;font-size:11px;cursor:pointer}
+    .imessage-messages.wallpaper-classic{background:#000}.imessage-messages.wallpaper-midnight{background:linear-gradient(155deg,#101d3c 0%,#070b18 48%,#030306 100%)}.imessage-messages.wallpaper-ocean{background:linear-gradient(145deg,#063c50 0%,#071d2b 52%,#020609 100%)}.imessage-messages.wallpaper-rose{background:linear-gradient(145deg,#5b1b3a 0%,#28101f 50%,#090308 100%)}.imessage-messages.wallpaper-lavender{background:linear-gradient(145deg,#40306e 0%,#1a1530 55%,#07060c 100%)}.imessage-messages.wallpaper-sunset{background:linear-gradient(155deg,#9a4b37 0%,#48233d 46%,#0a0814 100%)}.imessage-messages.wallpaper-forest{background:linear-gradient(155deg,#1e5b40 0%,#102b23 50%,#040907 100%)}.imessage-messages.wallpaper-stars{background-color:#070914;background-image:radial-gradient(circle at 15% 13%,#ffffff9c 0 1px,transparent 1.7px),radial-gradient(circle at 75% 21%,#ffffff80 0 1px,transparent 1.7px),radial-gradient(circle at 37% 42%,#ffffff70 0 1px,transparent 1.7px),radial-gradient(circle at 84% 67%,#ffffff85 0 1px,transparent 1.7px),radial-gradient(circle at 21% 80%,#ffffff70 0 1px,transparent 1.7px),linear-gradient(145deg,#141c3d,#05060d 80%);background-size:160px 190px,210px 220px,190px 170px,230px 190px,170px 230px,cover}.imessage-messages.wallpaper-custom{background-color:#050507;background-position:center;background-repeat:no-repeat;background-size:cover}
+    .wallpaper-backdrop{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.76);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;padding:18px}.wallpaper-backdrop[hidden]{display:none!important}.wallpaper-dialog{width:min(420px,100%);max-height:min(82dvh,740px);overflow-y:auto;border:1px solid #45454d;border-radius:25px;background:rgba(28,28,32,.98);box-shadow:0 25px 90px #000b;padding:18px}.wallpaper-dialog-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:17px}.wallpaper-dialog h2{font-size:20px;margin:0 0 5px;letter-spacing:-.3px}.wallpaper-dialog p{font-size:12px;color:#a0a0aa;line-height:1.45;margin:0}.wallpaper-close{flex:0 0 31px;width:31px;height:31px;border:0;border-radius:50%;background:#3b3b42;color:#fff;font-size:22px;line-height:1;cursor:pointer}.wallpaper-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.wallpaper-choice{border:1px solid #414149;background:#242429;color:#f7f7f9;border-radius:15px;padding:7px;display:flex;align-items:center;gap:9px;text-align:left;font-size:12px;cursor:pointer;min-width:0}.wallpaper-choice[aria-pressed="true"]{border-color:#69a8ff;box-shadow:0 0 0 1px #69a8ff}.wallpaper-swatch{height:38px;width:38px;flex:0 0 38px;border-radius:10px;border:1px solid #ffffff25}.swatch-classic{background:#000}.swatch-midnight{background:linear-gradient(145deg,#101d3c,#030306)}.swatch-ocean{background:linear-gradient(145deg,#063c50,#020609)}.swatch-rose{background:linear-gradient(145deg,#5b1b3a,#090308)}.swatch-lavender{background:linear-gradient(145deg,#40306e,#07060c)}.swatch-sunset{background:linear-gradient(145deg,#9a4b37,#0a0814)}.swatch-forest{background:linear-gradient(145deg,#1e5b40,#040907)}.swatch-stars{background-color:#070914;background-image:radial-gradient(#fff 1px,transparent 1.5px),linear-gradient(145deg,#141c3d,#05060d);background-size:11px 13px,cover}.wallpaper-dialog-actions{display:flex;gap:9px;margin-top:15px}.wallpaper-action{flex:1;border:1px solid #45454c;border-radius:13px;background:#36363d;color:#f5f5f7;padding:11px 10px;font-size:13px;cursor:pointer}.wallpaper-action.primary{background:#0a84ff;border-color:#0a84ff;color:#fff}.wallpaper-status{min-height:18px;color:#a9d3ff!important;font-size:12px!important;margin-top:10px!important}
+  </style>
 </head>
 <body>
-
-<main>
-  <section class="imessage-shell">
-
-    <header class="imessage-header">
-      <a href="/messages">← Chats{% if total_unread %} <span aria-label="{{ total_unread }} unread messages" style="display:inline-block;margin-left:.25rem;padding:.12rem .45rem;border-radius:999px;background:#e1306c;color:#fff;font-size:.72rem;font-weight:700;">{{ total_unread }}</span>{% endif %}</a>
-
-      {% if members %}
-        {% set first = members[0] %}
-        {% if first['avatar'] %}
-          <img class="imessage-avatar" src="{{first['avatar']}}">
-        {% endif %}
-      {% endif %}
-
-      <div class="imessage-header-name">{{chat['name']}}</div>
-
-      <div class="message-members">
-        {% for m in members %}
-          <a class="chat-member-link" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(160,160,180,.65)" href="{{ url_for('profile', oc_id=m['id']) }}">{{ m['name'] }}</a>{% if not loop.last %}, {% endif %}
+{% set contact = namespace(row=None) %}
+{% for member in members %}
+  {% if member['owner_id'] != user['id'] and contact.row is none %}{% set contact.row = member %}{% endif %}
+{% endfor %}
+{% if contact.row is none and members %}{% set contact.row = members[0] %}{% endif %}
+<section class="imessage-shell">
+  <header class="imessage-header">
+    <div class="header-line">
+      <a class="back-link" href="/messages"><span class="back-circle">‹</span><span>Messages{% if total_unread %} {{ total_unread }}{% endif %}</span></a>
+      <span aria-hidden="true" style="font-size:12px;color:#73737a">iMessage</span>
+      <button class="header-action" type="button" onclick="window.location.href='/messages'">Done</button>
+    </div>
+    <div class="contact-avatar">
+      {% if contact.row and contact.row['avatar'] %}<img src="{{ contact.row['avatar'] }}" alt="">
+      {% else %}{{ chat['name'][:1]|upper }}{% endif %}
+    </div>
+    <div class="contact-name">{{ chat['name'] }} <span class="down">›</span></div>
+    <div class="contact-subtitle">{% if members|length > 2 %}iMessage · {{ members|length }} participants{% else %}iMessage · OC Socials{% endif %}</div>
+    {% if members %}<div class="group-members">{% for m in members %}<a href="{{ url_for('profile', oc_id=m['id']) }}">{{ m['name'] }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+    <div class="wallpaper-control-row"><button class="wallpaper-open" id="wallpaper-open" type="button">Change Chat Wallpaper</button></div>
+    {% if chat['owner_id'] == user['id'] %}
+    <form id="add-oc-to-chat-form">
+      <select id="add-oc-to-chat-select" name="oc_id" required>
+        <option value="">Add an OC…</option>
+        {% for candidate in all_ocs %}
+          {% set already_member = namespace(found=false) %}
+          {% for member in members %}{% if member['id'] == candidate['id'] %}{% set already_member.found = true %}{% endif %}{% endfor %}
+          {% if not already_member.found %}<option value="{{ candidate['id'] }}">{{ candidate['name'] }} (@{{ candidate['username'] }})</option>{% endif %}
         {% endfor %}
-      </div>
-      {% if chat['owner_id'] == user['id'] %}
-      <form id="add-oc-to-chat-form" style="margin-top:.65rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-        <select id="add-oc-to-chat-select" name="oc_id" required style="max-width:100%;padding:.45rem .6rem;border-radius:.5rem;">
-          <option value="">Add your friend's or your OC…</option>
-          {% for candidate in all_ocs %}
-            {% set already_member = namespace(found=false) %}
-            {% for member in members %}{% if member['id'] == candidate['id'] %}{% set already_member.found = true %}{% endif %}{% endfor %}
-            {% if not already_member.found %}
-              <option value="{{ candidate['id'] }}">{{ candidate['name'] }} (@{{ candidate['username'] }})</option>
-            {% endif %}
-          {% endfor %}
-        </select>
-        <button type="submit">Add OC</button>
-        <span id="add-oc-to-chat-status" aria-live="polite"></span>
-      </form>
-      <script>
-      (() => {
-        const form = document.getElementById('add-oc-to-chat-form');
-        if (!form) return;
-        form.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          const status = document.getElementById('add-oc-to-chat-status');
-          const select = document.getElementById('add-oc-to-chat-select');
-          const button = form.querySelector('button[type="submit"]');
-          if (!select.value) return;
-          button.disabled = true;
-          status.textContent = 'Adding…';
-          try {
-            const response = await fetch("{{ url_for('add_oc_to_chat', chat_id=chat['id']) }}", {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ oc_id: select.value })
-            });
-            let result = {};
-            try { result = await response.json(); } catch (_) {}
-            if (!response.ok || !result.ok) throw new Error(result.error || 'Could not add that OC.');
-            window.location.reload();
-          } catch (error) {
-            status.textContent = error.message || 'Could not add that OC.';
-            button.disabled = false;
-          }
-        });
-      })();
-      </script>
-      {% endif %}
-    </header>
+      </select>
+      <button type="submit">Add OC</button>
+      <span id="add-oc-to-chat-status" aria-live="polite"></span>
+    </form>
+    {% endif %}
+  </header>
 
-    <section class="imessage-messages">
-
-      {% for m in messages %}
-        <div class="imessage-row {% if m['owner_id']==user['id'] %}mine{% endif %}">
-
-          {% if m['owner_id'] != user['id'] %}
-            {% if m['avatar'] %}
-              <img src="{{m['avatar']}}">
-            {% endif %}
-          {% endif %}
-
-          <div class="imessage-bubble">
-
-            {% if m['owner_id'] != user['id'] %}
-              <div class="imessage-name">{{m['name']}}</div>
-            {% endif %}
-
-            <div class="imessage-text">
-              {{m['text']}}
-            </div>
-
-            <div class="imessage-time">
-              {{m['created_at']}}
-            </div>
-
+  <section class="imessage-messages wallpaper-classic" id="imessage-messages" data-wallpaper="{{ chat_wallpaper|e }}" aria-label="Messages">
+    <div class="date-divider">Messages are between your OCs<br>Private conversation on OC Socials</div>
+    {% for m in messages %}
+      <div class="imessage-row {% if m['owner_id'] == user['id'] %}mine{% endif %}" data-message-id="{{ m['id'] }}">
+        {% if m['owner_id'] != user['id'] %}
+          <div class="sender-avatar">{% if m['avatar'] %}<img src="{{ m['avatar'] }}" alt="">{% else %}{{ m['name'][:1]|upper }}{% endif %}</div>
+        {% endif %}
+        <div class="message-content">
+          {% if m['owner_id'] != user['id'] and members|length > 2 %}<div class="imessage-name">{{ m['name'] }}</div>{% endif %}
+          <div class="imessage-bubble {% if m['image'] and not m['text'] %}media-only{% endif %}">
+            {% if m['image'] %}<a class="imessage-media-link" href="{{ m['image'] }}" target="_blank" rel="noopener noreferrer"><img class="imessage-media" src="{{ m['image'] }}" alt="Photo or GIF sent by {{ m['name'] }}" loading="lazy"></a>{% endif %}
+            {% if m['text'] %}<div class="imessage-text">{{ m['text'] }}</div>{% endif %}
           </div>
-
-          {% if m['owner_id'] == user['id'] %}
-            {% if m['avatar'] %}
-              <img src="{{m['avatar']}}">
-            {% endif %}
-          {% endif %}
-
+          <div class="imessage-time">{{ m['created_at'] }}</div>
         </div>
-
-      {% else %}
-
-        <p style="text-align:center;color:#999;">
-          No messages yet.
-        </p>
-
-      {% endfor %}
-
-    </section>
-
-    <section class="imessage-composer">
-
-      <form id="message-form">
-
-        <input
-          type="hidden"
-          id="chat-id"
-          value="{{chat['id']}}"
-        >
-
-        <select id="oc-id" required>
-          {% for oc in mine %}
-            <option value="{{oc['id']}}">
-              {{oc['name']}} (@{{oc['username']}})
-            </option>
-          {% endfor %}
-        </select>
-
-        <input
-          id="message-text"
-          placeholder="iMessage"
-          autocomplete="off"
-          required
-        >
-
-        <button type="submit">↑</button>
-
-      </form>
-
-      <small>
-        Sending as your selected OC.
-      </small>
-
-    </section>
-
+        {% if m['owner_id'] == user['id'] %}
+          <div class="sender-avatar">{% if m['avatar'] %}<img src="{{ m['avatar'] }}" alt="">{% else %}{{ m['name'][:1]|upper }}{% endif %}</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="empty-chat"><strong>{{ chat['name'] }}</strong>No messages yet. Send a message, photo, or GIF to start.</div>
+    {% endfor %}
   </section>
-</main>
 
-<script src="/static/app.js"></script>
+  <footer class="composer-area">
+    <div class="attachment-menu" id="attachment-menu" hidden>
+      <button class="attachment-option" type="button" id="camera-action"><span class="option-icon">📷</span><span class="option-copy"><span class="option-title">Camera</span><span class="option-hint">Take a photo on mobile</span></span></button>
+      <button class="attachment-option" type="button" id="photos-action"><span class="option-icon">🌄</span><span class="option-copy"><span class="option-title">Photos</span><span class="option-hint">Choose a photo from your device</span></span></button>
+      <button class="attachment-option" type="button" id="gif-file-action"><span class="option-icon">🎞️</span><span class="option-copy"><span class="option-title">GIF file</span><span class="option-hint">Send an animated GIF file</span></span></button>
+      <button class="attachment-option" type="button" id="gif-link-action"><span class="option-icon">✨</span><span class="option-copy"><span class="option-title">GIF link</span><span class="option-hint">Paste a direct GIF/image URL</span></span></button>
+    </div>
 
+    <div class="gif-panel" id="gif-panel" hidden>
+      <label for="gif-url-input">Paste a direct GIF URL (for example, a media link from Tenor or Giphy)</label>
+      <div class="gif-url-row"><input type="url" id="gif-url-input" placeholder="https://…" inputmode="url"><button type="button" id="use-gif-url">Attach</button></div>
+    </div>
+
+    <div class="upload-preview" id="upload-preview" hidden>
+      <img id="preview-image" class="preview-thumb" alt="">
+      <span id="preview-label">Attachment selected</span>
+      <button type="button" class="remove-attachment" id="remove-attachment" aria-label="Remove attachment">×</button>
+    </div>
+    <div class="upload-status" id="upload-status" aria-live="polite"></div>
+
+    <div class="composer-row">
+      <button class="plus-button" id="plus-button" type="button" aria-label="Add attachment" aria-expanded="false">+</button>
+      <form class="compose-form" id="imessage-compose">
+        <select class="oc-picker" id="oc-id" aria-label="Send as OC" required>
+          {% for oc in mine %}<option value="{{ oc['id'] }}">{{ oc['name'] }}</option>{% endfor %}
+        </select>
+        <div class="text-entry-shell">
+          <textarea class="message-text" id="message-text" rows="1" placeholder="Text Message · iMessage" aria-label="Message text"></textarea>
+          <button class="send-button" id="message-send" type="submit" aria-label="Send message">↑</button>
+        </div>
+      </form>
+    </div>
+    <div class="composer-hint">Sending as your selected OC · Photos and GIFs up to 20 MB</div>
+    <input class="hidden-input" type="file" id="photo-file-input" accept="image/*,.heic,.heif">
+    <input class="hidden-input" type="file" id="camera-file-input" accept="image/*" capture="environment">
+    <input class="hidden-input" type="file" id="gif-file-input" accept=".gif,image/gif">
+  </footer>
+</section>
+
+<div class="wallpaper-backdrop" id="wallpaper-backdrop" hidden>
+  <section class="wallpaper-dialog" role="dialog" aria-modal="true" aria-labelledby="wallpaper-title">
+    <div class="wallpaper-dialog-top">
+      <div><h2 id="wallpaper-title">Chat Wallpaper</h2><p>Choose a style or use your own photo. This changes your view only.</p></div>
+      <button type="button" class="wallpaper-close" id="wallpaper-close" aria-label="Close">×</button>
+    </div>
+    <div class="wallpaper-grid" id="wallpaper-grid">
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:classic" aria-pressed="false"><span class="wallpaper-swatch swatch-classic"></span><span>Classic Black</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:midnight" aria-pressed="false"><span class="wallpaper-swatch swatch-midnight"></span><span>Midnight</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:ocean" aria-pressed="false"><span class="wallpaper-swatch swatch-ocean"></span><span>Ocean</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:rose" aria-pressed="false"><span class="wallpaper-swatch swatch-rose"></span><span>Rose</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:lavender" aria-pressed="false"><span class="wallpaper-swatch swatch-lavender"></span><span>Lavender</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:sunset" aria-pressed="false"><span class="wallpaper-swatch swatch-sunset"></span><span>Sunset</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:forest" aria-pressed="false"><span class="wallpaper-swatch swatch-forest"></span><span>Forest</span></button>
+      <button type="button" class="wallpaper-choice" data-wallpaper-value="preset:stars" aria-pressed="false"><span class="wallpaper-swatch swatch-stars"></span><span>Starry Night</span></button>
+    </div>
+    <div class="wallpaper-dialog-actions">
+      <button type="button" class="wallpaper-action primary" id="wallpaper-upload-trigger">Use a Photo</button>
+      <button type="button" class="wallpaper-action" id="wallpaper-reset">Reset</button>
+    </div>
+    <input type="file" id="wallpaper-file-input" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+    <p class="wallpaper-status" id="wallpaper-status" role="status" aria-live="polite"></p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const form = document.getElementById('imessage-compose');
+  const textField = document.getElementById('message-text');
+  const sendButton = document.getElementById('message-send');
+  const chatId = {{ chat['id']|tojson }};
+  const messagesArea = document.getElementById('imessage-messages');
+  const wallpaperBackdrop = document.getElementById('wallpaper-backdrop');
+  const wallpaperStatus = document.getElementById('wallpaper-status');
+  const wallpaperFileInput = document.getElementById('wallpaper-file-input');
+  const wallpaperPresets = ['classic','midnight','ocean','rose','lavender','sunset','forest','stars'];
+
+  function applyWallpaper(value) {
+    const area = messagesArea;
+    wallpaperPresets.forEach(name => area.classList.remove('wallpaper-' + name));
+    area.classList.remove('wallpaper-custom');
+    area.style.backgroundImage = '';
+    area.style.backgroundSize = '';
+    area.style.backgroundPosition = '';
+    if (value.startsWith('preset:')) {
+      const name = value.slice(7);
+      area.classList.add('wallpaper-' + (wallpaperPresets.includes(name) ? name : 'classic'));
+    } else {
+      try {
+        const url = new URL(value, window.location.origin);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid URL');
+        area.classList.add('wallpaper-custom');
+        area.style.backgroundImage = 'linear-gradient(rgba(0,0,0,.44), rgba(0,0,0,.52)), url("' + url.href + '")';
+        area.style.backgroundSize = 'cover';
+        area.style.backgroundPosition = 'center';
+      } catch (_) {
+        area.classList.add('wallpaper-classic');
+      }
+    }
+    area.dataset.wallpaper = value;
+    document.querySelectorAll('[data-wallpaper-value]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.wallpaperValue === value));
+    });
+  }
+
+  async function saveWallpaper(value, file) {
+    wallpaperStatus.textContent = file ? 'Uploading wallpaper…' : 'Saving wallpaper…';
+    const options = { method: 'POST' };
+    if (file) {
+      const body = new FormData(); body.append('wallpaper_file', file, file.name); options.body = body;
+    } else {
+      options.headers = { 'Content-Type': 'application/json' };
+      options.body = JSON.stringify({ wallpaper: value });
+    }
+    try {
+      const response = await fetch('/api/chat/' + chatId + '/wallpaper', options);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Could not save this wallpaper.');
+      applyWallpaper(result.wallpaper);
+      wallpaperStatus.textContent = 'Wallpaper saved for your view.';
+    } catch (error) {
+      wallpaperStatus.textContent = error.message || 'Could not save this wallpaper.';
+    }
+  }
+
+  document.getElementById('wallpaper-open').addEventListener('click', () => {
+    wallpaperBackdrop.hidden = false;
+    wallpaperStatus.textContent = '';
+    applyWallpaper(messagesArea.dataset.wallpaper || 'preset:classic');
+  });
+  function closeWallpaperDialog() { wallpaperBackdrop.hidden = true; }
+  document.getElementById('wallpaper-close').addEventListener('click', closeWallpaperDialog);
+  wallpaperBackdrop.addEventListener('click', event => { if (event.target === wallpaperBackdrop) closeWallpaperDialog(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !wallpaperBackdrop.hidden) closeWallpaperDialog(); });
+  document.querySelectorAll('[data-wallpaper-value]').forEach(button => {
+    button.addEventListener('click', () => saveWallpaper(button.dataset.wallpaperValue, null));
+  });
+  document.getElementById('wallpaper-reset').addEventListener('click', () => saveWallpaper('preset:classic', null));
+  document.getElementById('wallpaper-upload-trigger').addEventListener('click', () => wallpaperFileInput.click());
+  wallpaperFileInput.addEventListener('change', () => {
+    const file = wallpaperFileInput.files && wallpaperFileInput.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { wallpaperStatus.textContent = 'Choose an image file.'; wallpaperFileInput.value = ''; return; }
+    if (file.size > 10 * 1024 * 1024) { wallpaperStatus.textContent = 'Wallpaper images must be 10 MB or smaller.'; wallpaperFileInput.value = ''; return; }
+    saveWallpaper('', file).finally(() => { wallpaperFileInput.value = ''; });
+  });
+  applyWallpaper(messagesArea.dataset.wallpaper || 'preset:classic');
+
+  const menu = document.getElementById('attachment-menu');
+  const plusButton = document.getElementById('plus-button');
+  const gifPanel = document.getElementById('gif-panel');
+  const gifUrlInput = document.getElementById('gif-url-input');
+  const photoInput = document.getElementById('photo-file-input');
+  const cameraInput = document.getElementById('camera-file-input');
+  const gifInput = document.getElementById('gif-file-input');
+  const preview = document.getElementById('upload-preview');
+  const previewImage = document.getElementById('preview-image');
+  const previewLabel = document.getElementById('preview-label');
+  const status = document.getElementById('upload-status');
+  let selectedFile = null;
+  let selectedGifUrl = '';
+  let previewObjectUrl = '';
+
+  function closeMenu() { menu.hidden = true; plusButton.setAttribute('aria-expanded', 'false'); }
+  function clearPreview() {
+    selectedFile = null;
+    selectedGifUrl = '';
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = '';
+    preview.hidden = true;
+    previewImage.style.display = '';
+    previewImage.removeAttribute('src');
+    photoInput.value = ''; cameraInput.value = ''; gifInput.value = ''; gifUrlInput.value = '';
+  }
+  function chooseFile(file, fromInput) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      status.textContent = 'Please choose a photo/GIF that is 20 MB or smaller.';
+      fromInput.value = '';
+      return;
+    }
+    if (!file.type.startsWith('image/') && !/\.heic$|\.heif$/i.test(file.name)) {
+      status.textContent = 'Please choose an image or GIF file.';
+      fromInput.value = '';
+      return;
+    }
+    clearPreview();
+    selectedFile = file;
+    previewObjectUrl = URL.createObjectURL(file);
+    previewImage.style.display = '';
+    previewImage.src = previewObjectUrl;
+    previewLabel.textContent = file.name;
+    preview.hidden = false;
+    status.textContent = '';
+    gifPanel.hidden = true;
+    closeMenu();
+  }
+  document.getElementById('plus-button').addEventListener('click', () => {
+    menu.hidden = !menu.hidden;
+    plusButton.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) gifPanel.hidden = true;
+  });
+  document.getElementById('photos-action').addEventListener('click', () => photoInput.click());
+  document.getElementById('camera-action').addEventListener('click', () => cameraInput.click());
+  document.getElementById('gif-file-action').addEventListener('click', () => gifInput.click());
+  photoInput.addEventListener('change', () => chooseFile(photoInput.files[0], photoInput));
+  cameraInput.addEventListener('change', () => chooseFile(cameraInput.files[0], cameraInput));
+  gifInput.addEventListener('change', () => chooseFile(gifInput.files[0], gifInput));
+  document.getElementById('gif-link-action').addEventListener('click', () => {
+    closeMenu(); gifPanel.hidden = !gifPanel.hidden; gifUrlInput.focus();
+  });
+  document.getElementById('use-gif-url').addEventListener('click', () => {
+    const value = gifUrlInput.value.trim();
+    let url;
+    try { url = new URL(value); } catch (_) { status.textContent = 'Paste a complete GIF URL first.'; return; }
+    if (!['http:', 'https:'].includes(url.protocol)) { status.textContent = 'GIF links must start with https:// or http://.'; return; }
+    selectedFile = null;
+    photoInput.value = ''; cameraInput.value = ''; gifInput.value = '';
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = '';
+    selectedGifUrl = url.href;
+    previewImage.removeAttribute('src');
+    previewImage.style.display = 'none';
+    previewLabel.textContent = 'GIF link attached';
+    preview.hidden = false;
+    status.textContent = '';
+    gifPanel.hidden = true;
+  });
+  document.getElementById('remove-attachment').addEventListener('click', () => {
+    clearPreview(); previewImage.style.display = ''; status.textContent = '';
+  });
+
+  textField.addEventListener('input', () => {
+    textField.style.height = 'auto';
+    textField.style.height = Math.min(textField.scrollHeight, 112) + 'px';
+  });
+  textField.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+  });
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = textField.value.trim();
+    if (!text && !selectedFile && !selectedGifUrl) { textField.focus(); return; }
+    const data = new FormData();
+    data.append('chat_id', String(chatId));
+    data.append('oc_id', document.getElementById('oc-id').value);
+    data.append('text', text);
+    if (selectedFile) data.append('media_file', selectedFile, selectedFile.name);
+    else if (selectedGifUrl) data.append('image', selectedGifUrl);
+    sendButton.disabled = true;
+    status.textContent = selectedFile ? 'Uploading attachment…' : 'Sending…';
+    try {
+      const response = await fetch('/api/message', { method: 'POST', body: data });
+      let result = {};
+      try { result = await response.json(); } catch (_) {}
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Could not send message. Please try again.');
+      window.location.reload();
+    } catch (error) {
+      status.textContent = error.message || 'Could not send message. Please try again.';
+      sendButton.disabled = false;
+    }
+  });
+
+  const messages = document.getElementById('imessage-messages');
+  if (messages) messages.scrollTop = messages.scrollHeight;
+
+  const addForm = document.getElementById('add-oc-to-chat-form');
+  if (addForm) addForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const select = document.getElementById('add-oc-to-chat-select');
+    const addButton = addForm.querySelector('button[type="submit"]');
+    const addStatus = document.getElementById('add-oc-to-chat-status');
+    if (!select.value) return;
+    addButton.disabled = true; addStatus.textContent = 'Adding…';
+    try {
+      const response = await fetch({{ url_for('add_oc_to_chat', chat_id=chat['id'])|tojson }}, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({oc_id: select.value})
+      });
+      let result = {}; try { result = await response.json(); } catch (_) {}
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Could not add that OC.');
+      window.location.reload();
+    } catch (error) { addStatus.textContent = error.message || 'Could not add that OC.'; addButton.disabled = false; }
+  });
+})();
+</script>
 </body>
 </html>
