@@ -15,6 +15,19 @@
 .ig-comment-content .comment-media-attachment{max-width:min(260px,100%)}
 .reply-form .comment-media-controls{flex-basis:100%}
 @media(max-width:560px){.comment-media-picker{padding:8px 10px}.comment-media-picker input[type=file]{width:145px}.comment-media-controls input[name=media_url]{min-width:130px}}
+</style><style id="carousel-swipe-fix">
+/* Carousel posts show one photo/video at a time; only the active slide is visible. */
+.ig-carousel{position:relative;width:100%;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.carousel-slides{position:relative;width:100%;min-width:0}
+.carousel-slide{display:block;width:100%;min-width:0}
+.carousel-slide.hidden{display:none!important}
+.carousel-slide .photo{display:block;width:100%;max-width:100%;height:auto;max-height:72vh;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.carousel-prev,.carousel-next{position:absolute;top:50%;transform:translateY(-50%);z-index:3;border:0;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.58);color:#fff;font-size:26px;line-height:1;cursor:pointer;padding:0}
+.carousel-prev{left:10px}.carousel-next{right:10px}
+.carousel-counter{position:absolute;right:10px;top:10px;z-index:3;border-radius:999px;padding:4px 8px;background:rgba(0,0,0,.62);color:#fff;font-size:12px}
+.carousel-dots{display:flex;justify-content:center;align-items:center;gap:5px;padding:10px 0 2px}
+.carousel-dot{width:6px;height:6px;border-radius:50%;background:#c9c9c9;display:inline-block}
+.carousel-dot.active{background:#3897f0}
 </style></head>
 <body class="twitter-page twitter-profile-page">
 <nav><b>𝕏 Twitter/X</b><span><a href="/twitter?actor={{active_oc_id or ''}}">Home</a><a href="/instagram">Instagram</a><a href="/messages">iMessage</a></span></nav>
