@@ -78,6 +78,11 @@
             {% if m['text'] %}<div class="imessage-text">{{ m['text'] }}</div>{% endif %}
           </div>
           <div class="imessage-time">{{ m['created_at'] }}</div>
+          {% if m['owner_id'] == user['id'] %}
+            <form method="post" action="{{ url_for('delete_message', message_id=m['id']) }}" class="imessage-delete-form" onsubmit="return confirm('Delete this message?')" style="margin-top:3px;text-align:right">
+              <button type="submit" aria-label="Delete message" title="Delete message" style="border:0;background:transparent;color:#a3a3a8;font-size:11px;padding:2px 5px;cursor:pointer">Delete</button>
+            </form>
+          {% endif %}
         </div>
         {% if m['owner_id'] == user['id'] %}
           <div class="sender-avatar">{% if m['avatar'] %}<img src="{{ m['avatar'] }}" alt="">{% else %}{{ m['name'][:1]|upper }}{% endif %}</div>
