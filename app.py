@@ -669,7 +669,7 @@ def instagram():
         WHERE p.platform='instagram' ORDER BY p.id DESC
     """, (active_oc_id,)).fetchall()
     replies = c.execute("""
-      SELECT r.*, o.name, o.username, o.avatar,
+      SELECT r.*, o.name, o.username, o.avatar, o.owner_id AS reply_owner_id,
              (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
              EXISTS(
                  SELECT 1 FROM reply_likes rl
@@ -782,7 +782,7 @@ def twitter():
     """, (active_oc_id, active_oc_id)).fetchall()
 
     replies = c.execute("""
-        SELECT r.*, o.name, o.username, o.avatar,
+        SELECT r.*, o.name, o.username, o.avatar, o.owner_id AS reply_owner_id,
             (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
             EXISTS(
                 SELECT 1 FROM reply_likes rl
@@ -841,7 +841,7 @@ def twitter_profile(oc_id):
     """, (active_oc_id, active_oc_id, oc_id)).fetchall()
 
     replies = c.execute("""
-        SELECT r.*, o.name, o.username, o.avatar,
+        SELECT r.*, o.name, o.username, o.avatar, o.owner_id AS reply_owner_id,
             (SELECT COUNT(*) FROM reply_likes rl WHERE rl.reply_id=r.id) AS reply_like_count,
             EXISTS(
                 SELECT 1 FROM reply_likes rl
@@ -1664,6 +1664,45 @@ def reply():
     return jsonify(ok=True)
 
 
+@app.route("/api/reply/<int:reply_id>/delete", methods=["POST"])
+@login_required
+def delete_reply_comment(reply_id):
+    """Delete a comment/reply only when it was posted as an OC owned by this account."""
+    user_id = int(current_user()["id"])
+    c = conn()
+    row = c.execute("""
+        SELECT r.id, r.post_id, r.parent_id, p.platform, o.owner_id
+        FROM replies r
+        JOIN posts p ON p.id=r.post_id
+        JOIN ocs o ON o.id=r.oc_id
+        WHERE r.id=?
+    """, (reply_id,)).fetchone()
+    if not row:
+        c.close()
+        return "Comment not found", 404
+    if str(row["platform"]).lower() not in {"instagram", "twitter"}:
+        c.close()
+        return "This comment cannot be deleted here", 400
+    if int(row["owner_id"]) != user_id:
+        c.close()
+        return "You can only delete comments made by your own OCs.", 403
+
+    # Keep other people's replies visible if a parent comment is removed.
+    c.execute("UPDATE replies SET parent_id=NULL WHERE parent_id=?", (reply_id,))
+    c.execute("DELETE FROM reply_likes WHERE reply_id=?", (reply_id,))
+    c.execute("DELETE FROM replies WHERE id=?", (reply_id,))
+    c.commit()
+    platform = str(row["platform"]).lower()
+    c.close()
+
+    # Return to the page the user was viewing, but never redirect to another host.
+    referrer = request.referrer or ""
+    parsed = urllib.parse.urlparse(referrer)
+    if parsed.netloc == request.host and parsed.scheme in {"http", "https"}:
+        return redirect(referrer)
+    return redirect(url_for("instagram" if platform == "instagram" else "twitter"))
+
+
 @app.route("/api/chat/<int:chat_id>/wallpaper", methods=["POST"])
 @login_required
 def save_chat_wallpaper(chat_id):
@@ -1804,6 +1843,39 @@ def message():
     c.commit()
     c.close()
     return jsonify(ok=True)
+
+
+@app.route("/api/message/<int:message_id>/delete", methods=["POST"])
+@login_required
+def delete_message(message_id):
+    """Delete a message only if its sender OC belongs to the signed-in account."""
+    user_id = int(current_user()["id"])
+    c = conn()
+    row = c.execute("""
+        SELECT m.id, m.chat_id, o.owner_id
+        FROM messages m JOIN ocs o ON o.id=m.oc_id
+        WHERE m.id=?
+    """, (message_id,)).fetchone()
+    if not row:
+        c.close()
+        return "Message not found", 404
+    allowed = c.execute(
+        "SELECT 1 FROM chat_users WHERE chat_id=? AND user_id=?",
+        (row["chat_id"], user_id),
+    ).fetchone()
+    if not allowed:
+        c.close()
+        return "You are not a member of this chat.", 403
+    if int(row["owner_id"]) != user_id:
+        c.close()
+        return "You can only delete messages sent by your own OCs.", 403
+    chat_id = int(row["chat_id"])
+    c.execute("DELETE FROM messages WHERE id=?", (message_id,))
+    c.commit()
+    c.close()
+    if request.is_json:
+        return jsonify(ok=True)
+    return redirect(url_for("chat", chat_id=chat_id))
 
 
 @app.route("/api/chat/<int:chat_id>/add-oc", methods=["POST"])
