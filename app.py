@@ -195,6 +195,9 @@ def init():
             id BIGSERIAL PRIMARY KEY, post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
             media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', position INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        # Additive migration: allow image/GIF attachments on Instagram and Twitter comments.
+        c.execute("ALTER TABLE replies ADD COLUMN IF NOT EXISTS media_url TEXT NOT NULL DEFAULT ''")
+        c.execute("ALTER TABLE replies ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS stories (
             id BIGSERIAL PRIMARY KEY, oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
             media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', text_overlay TEXT DEFAULT '',
@@ -417,6 +420,10 @@ def init():
     reply_columns = {row["name"] for row in c.execute("PRAGMA table_info(replies)").fetchall()}
     if "parent_id" not in reply_columns:
         c.execute("ALTER TABLE replies ADD COLUMN parent_id INTEGER")
+    if "media_url" not in reply_columns:
+        c.execute("ALTER TABLE replies ADD COLUMN media_url TEXT NOT NULL DEFAULT ''")
+    if "media_type" not in reply_columns:
+        c.execute("ALTER TABLE replies ADD COLUMN media_type TEXT NOT NULL DEFAULT ''")
     if "discord_avatar" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN discord_avatar TEXT DEFAULT ''")
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
@@ -1922,6 +1929,7 @@ def api_reply_like():
 @app.route("/api/reply", methods=["POST"])
 @login_required
 def reply():
+    # Accept ordinary form/JSON comments plus multipart photo or GIF attachments.
     data = request.get_json(silent=True) or request.form
     try:
         oc_id = int(data["oc_id"])
@@ -1936,8 +1944,43 @@ def reply():
         return jsonify(error="Invalid comment reply"), 400
 
     text = (data.get("text") or "").strip()
-    if not text:
-        return jsonify(error="Write a reply first"), 400
+    uploaded = request.files.get("media_file")
+    has_upload = bool(uploaded and uploaded.filename)
+    raw_media_url = (data.get("media_url") or "").strip()
+    if has_upload and raw_media_url:
+        return jsonify(error="Choose an uploaded photo/GIF or a direct GIF URL, not both."), 400
+    if not text and not has_upload and not raw_media_url:
+        return jsonify(error="Write a comment or attach a photo/GIF first."), 400
+
+    media_url = ""
+    media_type = ""
+    if raw_media_url:
+        parsed = urllib.parse.urlparse(raw_media_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return jsonify(error="Enter a direct HTTP or HTTPS media URL."), 400
+        suffix = Path(parsed.path).suffix.lower()
+        if suffix not in {".gif", ".png", ".jpg", ".jpeg", ".webp"}:
+            return jsonify(error="Use a direct GIF or image URL ending in .gif, .png, .jpg, .jpeg, or .webp."), 400
+        media_url = raw_media_url
+        media_type = "gif" if suffix == ".gif" else "image"
+
+    if has_upload:
+        extension = Path(secure_filename(uploaded.filename or "")).suffix.lower()
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+        if extension not in allowed_extensions:
+            return jsonify(error="Comments support JPG, PNG, WEBP, or GIF files."), 400
+        uploaded.stream.seek(0, os.SEEK_END)
+        media_size = uploaded.stream.tell()
+        uploaded.stream.seek(0)
+        if media_size > 10 * 1024 * 1024:
+            return jsonify(error="Photo/GIF comments must be 10 MB or smaller."), 413
+        stored_name = f"comment_{uuid.uuid4().hex}{extension}"
+        try:
+            media_url = store_post_photo(uploaded, stored_name)
+        except Exception as exc:
+            print(f"Comment media upload failed: {exc}")
+            return jsonify(error="Couldn't upload that photo/GIF. Please try again."), 502
+        media_type = "gif" if extension == ".gif" else "image"
 
     c = conn()
     oc = c.execute(
@@ -1948,7 +1991,7 @@ def reply():
         c.close()
         return jsonify(error="You don't own that OC"), 403
 
-    post = c.execute("SELECT id FROM posts WHERE id=?", (post_id,)).fetchone()
+    post = c.execute("SELECT id FROM posts WHERE id=? AND platform IN ('instagram','twitter')", (post_id,)).fetchone()
     if not post:
         c.close()
         return jsonify(error="Post not found"), 404
@@ -1962,8 +2005,8 @@ def reply():
             return jsonify(error="That comment does not belong to this post"), 400
 
     c.execute(
-        "INSERT INTO replies(post_id,oc_id,text,parent_id) VALUES(?,?,?,?)",
-        (post_id, oc_id, text, parent_id)
+        "INSERT INTO replies(post_id,oc_id,text,parent_id,media_url,media_type) VALUES(?,?,?,?,?,?)",
+        (post_id, oc_id, text, parent_id, media_url, media_type)
     )
     c.commit()
     c.close()
