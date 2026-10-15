@@ -264,7 +264,8 @@ document.addEventListener("click", async (event) => {
   }
 });
 
-// Instagram carousel controls: each post keeps its own current slide.
+// Instagram/Twitter carousel controls: show one media item at a time,
+// with arrow buttons and touch swipes on phones and tablets.
 document.querySelectorAll('[data-carousel]').forEach(carousel => {
   const slides = [...carousel.querySelectorAll('.carousel-slide')];
   if (slides.length < 2) return;
@@ -283,6 +284,28 @@ document.querySelectorAll('[data-carousel]').forEach(carousel => {
   };
   carousel.querySelector('.carousel-prev')?.addEventListener('click', () => show(index - 1));
   carousel.querySelector('.carousel-next')?.addEventListener('click', () => show(index + 1));
+
+  // A left swipe advances; a right swipe goes back. Ignore vertical swipes
+  // so normal page scrolling remains natural on mobile.
+  let touchStart = null;
+  carousel.addEventListener('touchstart', event => {
+    if (!event.changedTouches || !event.changedTouches.length) return;
+    const touch = event.changedTouches[0];
+    touchStart = { x: touch.clientX, y: touch.clientY };
+  }, { passive: true });
+  carousel.addEventListener('touchend', event => {
+    if (!touchStart || !event.changedTouches || !event.changedTouches.length) {
+      touchStart = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - touchStart.x;
+    const dy = touch.clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) >= 42 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      show(index + (dx < 0 ? 1 : -1));
+    }
+  }, { passive: true });
 });
 
 // Story viewer supports image/video backgrounds with readable wrapped text overlays.
