@@ -8,13 +8,14 @@
   <style>
     .ig-profile-banner-wrap { width: 100%; margin: 0 auto 12px; overflow: hidden; border-radius: 8px; background: #e9e9e9; }
     .ig-profile-banner { display: block; width: 100%; height: clamp(140px, 24vw, 230px); object-fit: cover; object-position: center; }
+    .ig-mutual-connections { margin: 8px 0 0; color: #777; font-size: 13px; } .ig-mutual-connections span { color: #777; } .ig-mutual-connections a { color: #262626; font-weight: 600; text-decoration: none; } .ig-mutual-connections a:hover { text-decoration: underline; }
     @media (max-width: 600px) { .ig-profile-banner-wrap { border-radius: 0; margin-bottom: 8px; } .ig-profile-banner { height: 140px; } }
   </style>
 </head>
 <body>
   <nav class="topnav">
     <b>Instagram</b>
-    <span><a href="{{ url_for('home') }}">Home</a><a href="{{ url_for('instagram') }}">Instagram</a><a href="{{ url_for('twitter') }}">Twitter/X</a><a href="{{ url_for('messages') }}">iMessage</a></span>
+    <span><a href="{{ url_for('home') }}">Home</a><a href="{{ url_for('instagram') }}">Instagram</a><a href="{{ url_for('instagram_dms') }}">DMs</a><a href="{{ url_for('twitter') }}">Twitter/X</a><a href="{{ url_for('messages') }}">iMessage</a></span>
   </nav>
   <main class="ig-profile-page">
     {% if oc['banner'] %}
@@ -57,6 +58,11 @@
         </div>
         <div class="ig-profile-display-name"><strong>{{oc['name']}}</strong></div>
         {% if oc['bio'] %}<p class="ig-profile-bio">{{oc['bio']}}</p>{% endif %}
+        {% if mutual_connections %}
+          <p class="ig-mutual-connections"><span>Followed by</span>
+          {% for mutual in mutual_connections[:3] %}<a href="{{ url_for('profile', oc_id=mutual['id']) }}">@{{mutual['username']}}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+          {% if mutual_count > 3 %} and {{mutual_count - 3}} others{% endif %}</p>
+        {% endif %}
       </div>
     </section>
     <div class="ig-profile-tabs"><span class="active">▦ <span>POSTS</span></span></div>
