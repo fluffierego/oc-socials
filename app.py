@@ -1,5 +1,4 @@
 import os
-from pathlib  import Path
 import json
 import io
 import tempfile
@@ -19,6 +18,7 @@ if os.path.exists(_ENV_FILE):
             os.environ.setdefault(_key.strip(), _value.strip().strip("\"").strip("'"))
 from functools import wraps
 from werkzeug.utils import secure_filename
+from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 
 try:
@@ -210,6 +210,12 @@ def init():
             chat_id BIGINT NOT NULL,
             last_read_message_id BIGINT NOT NULL DEFAULT 0,
             UNIQUE(user_id, chat_id))""")
+        # Per-user conversation settings (wallpaper is personal, not shared).
+        c.execute("""CREATE TABLE IF NOT EXISTS chat_preferences (
+            user_id BIGINT NOT NULL,
+            chat_id BIGINT NOT NULL,
+            wallpaper TEXT NOT NULL DEFAULT 'preset:classic',
+            PRIMARY KEY(user_id, chat_id))""")
         c.commit()
         c.close()
         return
@@ -329,6 +335,12 @@ def init():
       chat_id INTEGER NOT NULL,
       last_read_message_id INTEGER NOT NULL DEFAULT 0,
       UNIQUE(user_id, chat_id)
+    );
+    CREATE TABLE IF NOT EXISTS chat_preferences(
+      user_id INTEGER NOT NULL,
+      chat_id INTEGER NOT NULL,
+      wallpaper TEXT NOT NULL DEFAULT 'preset:classic',
+      PRIMARY KEY(user_id, chat_id)
     );
     """)
     c.execute("""CREATE TABLE IF NOT EXISTS oc_tweet_likes (
@@ -1117,10 +1129,15 @@ def chat(chat_id):
         AND sender_oc.owner_id<>?
     """, (user["id"], user["id"])).fetchone()
     total_unread = int(unread_total_row["total"] or 0)
+    preference = c.execute(
+        "SELECT wallpaper FROM chat_preferences WHERE user_id=? AND chat_id=?",
+        (user["id"], chat_id),
+    ).fetchone()
+    chat_wallpaper = str(preference["wallpaper"] if preference else "preset:classic")
     c.close()
     return render_template("chat.html", chat=chat_row, members=members, mine=mine,
                            messages=msgs, user=user, all_ocs=all_ocs,
-                           total_unread=total_unread)
+                           total_unread=total_unread, chat_wallpaper=chat_wallpaper)
 
 
 @app.route("/oc/new", methods=["GET", "POST"])
@@ -1647,18 +1664,83 @@ def reply():
     return jsonify(ok=True)
 
 
+@app.route("/api/chat/<int:chat_id>/wallpaper", methods=["POST"])
+@login_required
+def save_chat_wallpaper(chat_id):
+    """Save a personal wallpaper for a conversation."""
+    user = current_user()
+    c = conn()
+    allowed = c.execute(
+        "SELECT 1 FROM chat_users WHERE chat_id=? AND user_id=?",
+        (chat_id, user["id"]),
+    ).fetchone()
+    if not allowed:
+        c.close()
+        return jsonify(error="You are not a member of this chat."), 403
+
+    preset_names = {"classic", "midnight", "ocean", "rose", "lavender", "sunset", "forest", "stars"}
+    uploaded = request.files.get("wallpaper_file")
+    if uploaded and uploaded.filename:
+        safe_name = secure_filename(uploaded.filename or "")
+        extension = Path(safe_name).suffix.lower()
+        if extension not in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            c.close()
+            return jsonify(error="Choose a JPG, PNG, GIF, or WEBP wallpaper."), 400
+        try:
+            uploaded.stream.seek(0, os.SEEK_END)
+            size = uploaded.stream.tell()
+            uploaded.stream.seek(0)
+        except (AttributeError, OSError):
+            size = 0
+        if size > 10 * 1024 * 1024:
+            c.close()
+            return jsonify(error="Wallpaper images must be 10 MB or smaller."), 413
+        stored_name = f"chat_wallpaper_{chat_id}_{user['id']}_{uuid.uuid4().hex}{extension}"
+        try:
+            wallpaper = store_post_photo(uploaded, stored_name)
+        except Exception as exc:
+            c.close()
+            print(f"iMessage wallpaper upload failed: {exc}")
+            return jsonify(error="Could not upload that wallpaper. Please try again."), 502
+    else:
+        data = request.get_json(silent=True) or request.form
+        wallpaper = str(data.get("wallpaper", "preset:classic") or "preset:classic").strip()
+        if not wallpaper.startswith("preset:") or wallpaper.split(":", 1)[1] not in preset_names:
+            c.close()
+            return jsonify(error="Choose one of the available wallpaper styles."), 400
+
+    c.execute("""INSERT INTO chat_preferences(user_id, chat_id, wallpaper) VALUES(?,?,?)
+        ON CONFLICT(user_id, chat_id) DO UPDATE SET wallpaper=excluded.wallpaper""",
+        (user["id"], chat_id, wallpaper))
+    c.commit()
+    c.close()
+    return jsonify(ok=True, wallpaper=wallpaper)
+
+
 @app.route("/api/message", methods=["POST"])
 @login_required
 def message():
-    data = request.json or request.form
+    # Accept JSON (text / direct GIF URL) and multipart form data (photo/GIF uploads).
+    data = (request.get_json(silent=True) or {}) if request.is_json else request.form
     try:
         chat_id = int(data["chat_id"])
         oc_id = int(data["oc_id"])
     except (KeyError, TypeError, ValueError):
         return jsonify(error="Missing chat or OC"), 400
-    text = data.get("text", "").strip()
-    if not text:
-        return jsonify(error="Message is empty"), 400
+
+    text = str(data.get("text", "") or "").strip()
+    image = str(data.get("image", "") or "").strip()
+    uploaded_media = request.files.get("media_file")
+    has_upload = bool(uploaded_media and uploaded_media.filename)
+    if not text and not image and not has_upload:
+        return jsonify(error="Write a message or attach a photo/GIF first."), 400
+
+    # GIF URLs can be sent directly; only web URLs are accepted.
+    if image:
+        parsed_image_url = urllib.parse.urlparse(image)
+        if parsed_image_url.scheme.lower() not in ("http", "https") or not parsed_image_url.netloc:
+            return jsonify(error="GIF links must start with http:// or https://."), 400
+
     c = conn()
     member = c.execute("""
       SELECT o.* FROM ocs o JOIN chat_members cm ON cm.oc_id=o.id
@@ -1667,7 +1749,33 @@ def message():
     if not member:
         c.close()
         return jsonify(error="That OC is not one of your OCs in this chat"), 403
-    image = str(data.get("image", "") or "").strip()
+
+    # Store uploaded photos and GIFs in persistent storage in production. The existing
+    # messages.image column stores their public URL, so no database migration is needed.
+    if has_upload:
+        safe_original_name = secure_filename(uploaded_media.filename or "")
+        extension = Path(safe_original_name).suffix.lower()
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif"}
+        if extension not in allowed_extensions:
+            c.close()
+            return jsonify(error="Please attach a JPG, PNG, GIF, WEBP, HEIC, or HEIF image."), 400
+        try:
+            uploaded_media.stream.seek(0, os.SEEK_END)
+            media_size = uploaded_media.stream.tell()
+            uploaded_media.stream.seek(0)
+        except (AttributeError, OSError):
+            media_size = 0
+        if media_size > 20 * 1024 * 1024:
+            c.close()
+            return jsonify(error="Photos and GIFs must be 20 MB or smaller."), 413
+        stored_name = f"message_{chat_id}_{uuid.uuid4().hex}{extension}"
+        try:
+            image = store_post_photo(uploaded_media, stored_name)
+        except Exception as exc:
+            c.close()
+            print(f"iMessage media upload failed: {exc}")
+            return jsonify(error="Could not upload that photo/GIF. Please try again."), 502
+
     c.execute("INSERT INTO messages(chat_id,oc_id,text,image) VALUES(?,?,?,?)",
               (chat_id, oc_id, text, image))
     message_id = int(c.execute("SELECT last_insert_rowid()").fetchone()[0])
