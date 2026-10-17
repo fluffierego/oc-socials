@@ -759,15 +759,23 @@ def instagram():
     group_index = {}
     for story in stories:
         row = dict(story)
-        key = row.get("story_group_id") or f"legacy-{row['id']}"
+        # Use the visible account identity as well as owner so duplicate OC
+        # records with the same username do not create duplicate Story bubbles.
+        username_key = str(row.get("username") or "").strip().casefold()
+        owner_key = str(row.get("author_owner_id") or "")
+        key = f"owner-{owner_key}-username-{username_key}" if username_key else f"owner-{owner_key}-oc-{row['oc_id']}"
         if key not in group_index:
             group_index[key] = {"key": key, "oc_id": row["oc_id"], "username": row["username"],
-                                "avatar": row["avatar"], "name": row["name"], "slides": []}
+                                "avatar": row["avatar"], "name": row["name"],
+                                "owner_id": row["author_owner_id"], "slides": []}
             story_groups.append(group_index[key])
         group_index[key]["slides"].append({
-            "id": row["id"], "media_url": row["media_url"], "media_type": row["media_type"],
-            "text_overlay": row.get("text_overlay") or "", "text_color": row.get("text_color") or "#ffffff"
+            "id": row["id"], "oc_id": row["oc_id"], "media_url": row["media_url"],
+            "media_type": row["media_type"], "text_overlay": row.get("text_overlay") or "",
+            "text_color": row.get("text_color") or "#ffffff"
         })
+    for group in story_groups:
+        group["slides"].reverse()
     c.close()
     return render_template(
         "instagram.html", posts=post_rows, replies=replies, stories=stories, story_groups=story_groups,
@@ -848,6 +856,36 @@ def _get_or_create_instagram_dm(c, oc_a_id, oc_b_id):
         (low_id, high_id),
     )
     return int(c.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+
+@app.route("/api/story/<int:story_id>", methods=["DELETE", "POST"])
+@login_required
+def delete_story(story_id):
+    """Delete one Story slide owned by the current user."""
+    user = current_user()
+    c = conn()
+    story = c.execute(
+        "SELECT s.id, o.owner_id FROM stories s JOIN ocs o ON o.id=s.oc_id WHERE s.id=?",
+        (story_id,),
+    ).fetchone()
+    if not story:
+        c.close()
+        return jsonify(error="This Story is already deleted or unavailable."), 404
+    if int(story["owner_id"]) != int(user["id"]):
+        c.close()
+        return jsonify(error="You can only delete Stories posted by your own OCs."), 403
+    try:
+        # Remove legacy reply rows explicitly so a database without active
+        # foreign-key cascades cannot block Story deletion.
+        c.execute("DELETE FROM story_replies WHERE story_id=?", (story_id,))
+        c.execute("DELETE FROM stories WHERE id=?", (story_id,))
+        c.commit()
+    except Exception as exc:
+        c.close()
+        print(f"Story deletion failed: {exc}")
+        return jsonify(error=f"Could not delete this Story: {type(exc).__name__}. Please try again."), 500
+    c.close()
+    return jsonify(ok=True)
 
 
 @app.route("/api/story/<int:story_id>/reply", methods=["POST"])
@@ -1331,13 +1369,21 @@ def following_feed():
                 LIMIT 100
             """, (active_oc_id,)).fetchall()
             posts = _attach_post_media(posts)
-            stories = c.execute("""
+            story_rows = c.execute("""
                 SELECT s.*, o.name, o.username, o.avatar, o.id AS author_oc_id
                 FROM stories s JOIN ocs o ON o.id=s.oc_id
                 JOIN oc_follows f ON f.followed_oc_id=o.id AND f.follower_oc_id=?
                 WHERE s.expires_at > CURRENT_TIMESTAMP
-                ORDER BY s.created_at DESC LIMIT 30
+                ORDER BY s.created_at DESC LIMIT 100
             """, (active_oc_id,)).fetchall()
+            # The Following feed previews one bubble per OC, not one per slide.
+            stories = []
+            seen_story_oc_ids = set()
+            for story in story_rows:
+                story_oc_id = story["author_oc_id"]
+                if story_oc_id not in seen_story_oc_ids:
+                    seen_story_oc_ids.add(story_oc_id)
+                    stories.append(story)
 
     c.close()
     return render_template(
