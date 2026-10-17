@@ -954,6 +954,54 @@ def instagram_dms():
     return render_template("instagram_dms.html", conversations=conversations, user=user)
 
 
+@app.route("/instagram/dms/new", methods=["GET", "POST"])
+@login_required
+def instagram_dm_new():
+    """Start an Instagram DM directly, without requiring a Story reply."""
+    user = current_user()
+    c = conn()
+    owned_ocs = c.execute(
+        "SELECT id, name, username, avatar FROM ocs WHERE owner_id=? ORDER BY name",
+        (user["id"],),
+    ).fetchall()
+    other_ocs = c.execute(
+        "SELECT id, name, username, avatar FROM ocs WHERE owner_id<>? ORDER BY username, name",
+        (user["id"],),
+    ).fetchall()
+    error = ""
+    if request.method == "POST":
+        try:
+            sender_id = int(request.form.get("sender_oc_id", ""))
+            recipient_id = int(request.form.get("recipient_oc_id", ""))
+        except (TypeError, ValueError):
+            sender_id = recipient_id = 0
+            error = "Choose both the OC sending the message and the OC receiving it."
+        sender = next((oc for oc in owned_ocs if int(oc["id"]) == sender_id), None)
+        recipient = next((oc for oc in other_ocs if int(oc["id"]) == recipient_id), None)
+        if not error and not sender:
+            error = "You can only send messages as one of your own OCs."
+        elif not error and not recipient:
+            error = "Choose an OC belonging to another account."
+        if not error:
+            try:
+                conversation_id = _get_or_create_instagram_dm(c, sender_id, recipient_id)
+                c.commit()
+                c.close()
+                return redirect(url_for("instagram_dm_conversation", conversation_id=conversation_id))
+            except Exception as exc:
+                c.rollback()
+                print(f"Could not start Instagram DM: {exc}")
+                error = "Couldn't start that conversation. Please try again."
+    selected_sender = request.form.get("sender_oc_id", "") if request.method == "POST" else request.args.get("as_oc_id", "")
+    selected_recipient = request.form.get("recipient_oc_id", "") if request.method == "POST" else request.args.get("to_oc_id", "")
+    if not selected_sender and owned_ocs:
+        selected_sender = str(owned_ocs[0]["id"])
+    c.close()
+    return render_template("instagram_dm_new.html", owned_ocs=owned_ocs, other_ocs=other_ocs,
+                           selected_sender=selected_sender, selected_recipient=selected_recipient,
+                           user=user, error=error)
+
+
 @app.route("/instagram/dms/<int:conversation_id>", methods=["GET", "POST"])
 @login_required
 def instagram_dm_conversation(conversation_id):
