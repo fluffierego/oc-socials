@@ -307,28 +307,3 @@ document.querySelectorAll('[data-carousel]').forEach(carousel => {
     }
   }, { passive: true });
 });
-
-// Story viewer supports image/video backgrounds with readable wrapped text overlays.
-const storyViewer = document.getElementById('story-viewer');
-if (storyViewer) {
-  const mediaSlot = storyViewer.querySelector('.story-viewer-media');
-  const textSlot = storyViewer.querySelector('.story-viewer-text');
-  document.querySelectorAll('.story-bubble').forEach(bubble => bubble.addEventListener('click', () => {
-    mediaSlot.replaceChildren();
-    const type = bubble.dataset.storyType;
-    const media = document.createElement(type === 'video' ? 'video' : 'img');
-    media.src = bubble.dataset.storyMedia;
-    if (type === 'video') { media.controls = true; media.autoplay = true; media.playsInline = true; }
-    else media.alt = 'Instagram Story';
-    mediaSlot.appendChild(media);
-    textSlot.textContent = bubble.dataset.storyText || '';
-    textSlot.style.color = bubble.dataset.storyColor || '#fff';
-    textSlot.hidden = !textSlot.textContent;
-    storyViewer.hidden = false;
-  }));
-  storyViewer.querySelector('.story-close').addEventListener('click', () => {
-    const video = mediaSlot.querySelector('video'); if (video) video.pause();
-    storyViewer.hidden = true; mediaSlot.replaceChildren();
-  });
-  storyViewer.addEventListener('click', e => { if (e.target === storyViewer) storyViewer.querySelector('.story-close').click(); });
-}

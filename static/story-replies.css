@@ -1,63 +1,15 @@
-/* Story viewer: keep text directly over the photo */
-.story-viewer {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #080a0c;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.story-viewer[hidden] {
-  display: none !important;
-}
-
-.story-viewer-media {
-  position: relative;
-  width: min(100vw, 430px);
-  height: min(100vh, 760px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.story-viewer-media img,
-.story-viewer-media video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.story-viewer-text {
-  position: absolute;
-  z-index: 2;
-  left: 8%;
-  right: 8%;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #fff;
-  font-size: clamp(18px, 4vw, 30px);
-  font-weight: 700;
-  text-align: center;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  text-shadow: 0 2px 5px #000;
-  pointer-events: none;
-}
-
-.story-close {
-  position: absolute;
-  top: 18px;
-  right: 22px;
-  z-index: 5;
-  font-size: 32px;
-  color: #fff;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
+/* Centered Instagram-style Story viewer; reply controls sit below the media. */
+.story-viewer { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; box-sizing:border-box; padding:16px; overflow:auto; background:rgba(8,10,12,.96); color:#fff; }
+.story-viewer[hidden] { display:none !important; }
+.story-viewer-media { position:relative; flex:0 1 auto; width:min(360px, calc((100vh - 170px) * 9 / 16), calc(100vw - 32px)); aspect-ratio:9 / 16; max-height:calc(100vh - 170px); min-height:180px; overflow:hidden; isolation:isolate; background:#151515; border:1px solid rgba(255,255,255,.14); border-radius:16px; box-shadow:0 14px 42px rgba(0,0,0,.45); }
+.story-viewer-media-content, .story-viewer-media-content > img, .story-viewer-media-content > video { position:absolute; inset:0; display:block; width:100%; height:100%; }
+.story-viewer-media-content > img, .story-viewer-media-content > video { object-fit:cover; object-position:center; background:#111; }
+.story-viewer-text { position:absolute; z-index:2; top:50%; left:7%; right:7%; max-height:72%; margin:0; overflow:auto; color:#fff; font-size:clamp(18px,3.5vh,30px); font-weight:750; line-height:1.15; text-align:center; white-space:pre-wrap; overflow-wrap:anywhere; text-shadow:0 2px 5px rgba(0,0,0,.95),0 0 2px #000; transform:translateY(-50%); pointer-events:none; }
+.story-viewer .story-account, .story-viewer .story-progress { display:none !important; }
+.story-viewer .story-close { position:fixed; top:16px; right:18px; z-index:10; font-size:32px; color:#fff; background:transparent; border:0; cursor:pointer; }
+.story-reply-form { display:flex; align-items:center; gap:8px; width:min(360px, calc(100vw - 32px)); box-sizing:border-box; }
+.story-reply-form select { max-width:32%; min-width:90px; }
+.story-reply-form input[name="text"] { flex:1; min-width:0; }
+.story-reply-form input, .story-reply-form select { box-sizing:border-box; height:42px; border:1px solid #555; border-radius:22px; padding:0 12px; background:#171717; color:#fff; }
+.story-reply-form button { color:#fff; background:transparent; border:0; font-size:22px; cursor:pointer; }
+.story-reply-status { width:min(360px, calc(100vw - 32px)); margin:0; color:#fff; font-size:13px; }
