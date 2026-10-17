@@ -851,23 +851,33 @@ def reply_to_story(story_id):
         FROM stories s JOIN ocs o ON o.id=s.oc_id
         WHERE s.id=? AND s.expires_at > CURRENT_TIMESTAMP""", (story_id,)).fetchone()
     
-if not story:
-         c.close()
-        return jsonify(error="This Story has expired or is unavailable."), 404 
 
-if int(story["story_oc_id"]) == int(oc_id):    
-      c.close()
-      return jsonify(error="You can't reply to your own Story."), 400
+    if not story:
+        c.close()
+        return jsonify(error="This Story has expired or is unavailable."), 404
 
-try:
-            
-  conversation_id = _get_or_create_instagram_dm(c, oc_id, int(story["story_oc_id"]))
-        c.execute("""INSERT INTO instagram_dm_messages
-        
+    if int(story["story_oc_id"]) == int(oc_id):
+        c.close()
+        return jsonify(error="You can't reply to your own Story."), 400
+
+    try:
+        conversation_id = _get_or_create_instagram_dm(
+            c, oc_id, int(story["story_oc_id"])
+        )
+        c.execute(
+            """INSERT INTO instagram_dm_messages
             (conversation_id, sender_oc_id, text, story_id, story_media_url, story_media_type, story_text, story_username)
             VALUES(?,?,?,?,?,?,?,?)""",
-            (conversation_id, oc_id, text, story_id, story["story_media_url"],
-             story["story_media_type"] or "image", story["story_text"] or "", story["story_username"] or ""),
+            (
+                conversation_id,
+                oc_id,
+                text,
+                story_id,
+                story["story_media_url"],
+                story["story_media_type"] or "image",
+                story["story_text"] or "",
+                story["story_username"] or "",
+            ),
         )
         c.commit()
     except Exception as exc:
@@ -875,14 +885,17 @@ try:
         print(f"Instagram Story-to-DM failed: {exc}")
         c.close()
         return jsonify(error="Couldn't open the Instagram DM for this Story. Please try again."), 500
+
     c.close()
     return jsonify(
-        ok=True,
-        message=f"Story reply sent to @{story['story_username']}.",
-        conversation_id=conversation_id,
-        conversation_url=url_for("instagram_dm_conversation", conversation_id=conversation_id),
-    )
-
+    ok=True,
+    message=f"Story reply sent to @{story['story_username']}.",
+    conversation_id=conversation_id,
+    conversation_url=url_for(
+        "instagram_dm_conversation",
+        conversation_id=conversation_id
+    ),
+)
 
 @app.route("/api/story/<int:story_id>/replies", methods=["GET"])
 @login_required
