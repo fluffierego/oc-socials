@@ -853,7 +853,7 @@ def reply_to_story(story_id):
     if not story:
         c.close()
         return jsonify(error="This Story has expired or is unavailable."), 404
-    if int(story["story_owner_id"]) == int(user["id"]):
+    if int(story["story_oc_id"]) == int(oc_id)::
         c.close()
         return jsonify(error="You can't reply to your own Story."), 400
 
