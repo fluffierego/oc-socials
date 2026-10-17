@@ -642,14 +642,13 @@
 }
 
 /* Fixed portrait frame: the Story's image/video fills the grey placeholder area. */
-.story-viewer-media {
-  position: relative;
-  display: block;
-  flex: 0 0 auto;
-  width: auto;
-  height: min(88vh, 740px, calc((100vw - 24px) * 16 / 9));
-  aspect-ratio: 9 / 16;
-  max-width: calc(100vw - 24px);
+flex: 0 1 auto;
+width: min(360px, calc(100vw - 32px));
+height: min(640px, calc(100vh - 100px));
+aspect-ratio: 9 / 16;
+max-width: calc(100vw - 32px);
+ 
+  
   overflow: hidden;
   isolation: isolate;
   background: #151515;
