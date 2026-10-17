@@ -202,7 +202,9 @@ def init():
             id BIGSERIAL PRIMARY KEY, oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
             media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', text_overlay TEXT DEFAULT '',
             text_color TEXT DEFAULT '#ffffff', text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
+            story_group_id TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP NOT NULL)""")
+        c.execute("ALTER TABLE stories ADD COLUMN IF NOT EXISTS story_group_id TEXT NOT NULL DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS story_replies (
             id BIGSERIAL PRIMARY KEY,
             story_id BIGINT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
@@ -297,6 +299,7 @@ def init():
       text_overlay TEXT DEFAULT '',
       text_color TEXT DEFAULT '#ffffff',
       text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
+      story_group_id TEXT NOT NULL DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL
     );
@@ -426,6 +429,9 @@ def init():
         c.execute("ALTER TABLE replies ADD COLUMN media_type TEXT NOT NULL DEFAULT ''")
     if "discord_avatar" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN discord_avatar TEXT DEFAULT ''")
+    story_columns = {row["name"] for row in c.execute("PRAGMA table_info(stories)").fetchall()}
+    if "story_group_id" not in story_columns:
+        c.execute("ALTER TABLE stories ADD COLUMN story_group_id TEXT NOT NULL DEFAULT ''")
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
     if "owner_id" not in chat_columns:
         c.execute("ALTER TABLE chats ADD COLUMN owner_id INTEGER DEFAULT 0")
@@ -749,9 +755,22 @@ def instagram():
                     o.owner_id AS author_owner_id
         FROM stories s JOIN ocs o ON o.id=s.oc_id
         WHERE s.expires_at > CURRENT_TIMESTAMP ORDER BY s.created_at DESC""").fetchall()
+    story_groups = []
+    group_index = {}
+    for story in stories:
+        row = dict(story)
+        key = row.get("story_group_id") or f"legacy-{row['id']}"
+        if key not in group_index:
+            group_index[key] = {"key": key, "oc_id": row["oc_id"], "username": row["username"],
+                                "avatar": row["avatar"], "name": row["name"], "slides": []}
+            story_groups.append(group_index[key])
+        group_index[key]["slides"].append({
+            "id": row["id"], "media_url": row["media_url"], "media_type": row["media_type"],
+            "text_overlay": row.get("text_overlay") or "", "text_color": row.get("text_color") or "#ffffff"
+        })
     c.close()
     return render_template(
-        "instagram.html", posts=post_rows, replies=replies, stories=stories,
+        "instagram.html", posts=post_rows, replies=replies, stories=stories, story_groups=story_groups,
         user=user, owned_ocs=owned_ocs, active_oc_id=active_oc_id
     )
 
@@ -768,37 +787,48 @@ def create_story():
     if not oc:
         c.close()
         return jsonify(error="You don't own that OC."), 403
-    uploaded = request.files.get("story_media")
-    if not uploaded or not uploaded.filename:
+    uploads = [f for f in request.files.getlist("story_media") if f and f.filename]
+    if not uploads:
+        # Backward-compatible single-file form handling.
+        single = request.files.get("story_media")
+        if single and single.filename:
+            uploads = [single]
+    if not uploads:
         c.close()
-        return jsonify(error="Choose a photo or video for your Story."), 400
-    ext = os.path.splitext(uploaded.filename)[1].lower()
+        return jsonify(error="Choose one or more photos or videos for your Story."), 400
+    if len(uploads) > 10:
+        c.close()
+        return jsonify(error="You can add up to 10 slides to one Story."), 400
     image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
     video_exts = {".mp4", ".webm", ".mov", ".m4v"}
-    if ext not in image_exts | video_exts:
-        c.close()
-        return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V."), 400
-    uploaded.stream.seek(0, 2)
-    size = uploaded.stream.tell()
-    uploaded.stream.seek(0)
-    if size > 50 * 1024 * 1024:
-        c.close()
-        return jsonify(error="Story media must be 50 MB or smaller."), 400
-    media_type = "video" if ext in video_exts else "image"
-    try:
-        media_url = store_post_photo(uploaded, f"story_{uuid.uuid4().hex}{ext}")
-    except Exception as exc:
-        c.close()
-        print(f"Story upload failed: {exc}")
-        return jsonify(error="Could not store the Story. Check Supabase Storage configuration."), 502
+    prepared = []
+    for uploaded in uploads:
+        ext = os.path.splitext(uploaded.filename)[1].lower()
+        if ext not in image_exts | video_exts:
+            c.close()
+            return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V."), 400
+        uploaded.stream.seek(0, 2)
+        size = uploaded.stream.tell()
+        uploaded.stream.seek(0)
+        if size > 50 * 1024 * 1024:
+            c.close()
+            return jsonify(error="Each Story slide must be 50 MB or smaller."), 400
+        prepared.append((uploaded, ext, "video" if ext in video_exts else "image"))
     overlay = request.form.get("text_overlay", "").strip()[:500]
     text_color = request.form.get("text_color", "#ffffff")
     if text_color not in {"#ffffff", "#000000", "#ffcc00", "#ff5c8a", "#8be9fd"}:
         text_color = "#ffffff"
-    # SQLite and PostgreSQL both accept this UTC timestamp format for comparison.
     expires_at = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 86400))
-    c.execute("INSERT INTO stories(oc_id,media_url,media_type,text_overlay,text_color,expires_at) VALUES(?,?,?,?,?,?)",
-              (oc_id, media_url, media_type, overlay, text_color, expires_at))
+    group_id = uuid.uuid4().hex
+    try:
+        for uploaded, ext, media_type in prepared:
+            media_url = store_post_photo(uploaded, f"story_{uuid.uuid4().hex}{ext}")
+            c.execute("INSERT INTO stories(oc_id,media_url,media_type,text_overlay,text_color,story_group_id,expires_at) VALUES(?,?,?,?,?,?,?)",
+                      (oc_id, media_url, media_type, overlay, text_color, group_id, expires_at))
+    except Exception as exc:
+        c.close()
+        print(f"Story upload failed: {exc}")
+        return jsonify(error="Could not store the Story. Check Supabase Storage configuration."), 502
     c.commit()
     c.close()
     return redirect(url_for("instagram"))
