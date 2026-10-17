@@ -82,7 +82,7 @@
     status.textContent = 'Deleting Story…';
     try {
       const response = await fetch(`/api/story/${encodeURIComponent(storyId)}`, {
-        method: 'DELETE', headers: { 'Accept': 'application/json' }
+        method: 'POST', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Could not delete this Story.');
