@@ -7,6 +7,8 @@
   const form = viewer.querySelector('.story-reply-form');
   const status = viewer.querySelector('.story-reply-status');
   const bubbles = Array.from(document.querySelectorAll('.story-bubble'));
+  const currentUserId = String(viewer.dataset.currentUserId || '');
+  const deleteButton = viewer.querySelector('.story-menu');
   let groupIndex = -1, slideIndex = 0, slides = [], storyId = null;
 
   function renderSlide() {
@@ -27,6 +29,10 @@
     const bubble = bubbles[groupIndex];
     viewer.querySelector('.story-account-avatar').src = bubble.dataset.storyAvatar || '';
     viewer.querySelector('.story-account-name').textContent = bubble.dataset.storyName || '';
+    const isOwner = String(bubble.dataset.storyOwnerId || '') === currentUserId;
+    deleteButton.hidden = !isOwner;
+    deleteButton.style.display = isOwner ? 'inline-flex' : 'none';
+    deleteButton.disabled = false;
     const progress = viewer.querySelector('.story-progress');
     progress.replaceChildren();
     slides.forEach((_, i) => {
@@ -37,13 +43,13 @@
     status.textContent = '';
   }
 
-  function openGroup(index, resetForm = true) {
+  function openGroup(index, resetForm = true, startAtEnd = false) {
     if (index < 0 || index >= bubbles.length) { closeViewer(); return; }
     groupIndex = index;
     try { slides = JSON.parse(bubbles[groupIndex].dataset.storySlides || '[]'); }
     catch (_) { slides = []; }
     if (!slides.length) return;
-    slideIndex = 0;
+    slideIndex = startAtEnd ? slides.length - 1 : 0;
     if (resetForm) form.reset();
     renderSlide();
     viewer.hidden = false;
@@ -55,7 +61,7 @@
     if (direction < 0 && slideIndex > 0) {
       slideIndex--; renderSlide(); return;
     }
-    openGroup(groupIndex + direction, false);
+    openGroup(groupIndex + direction, false, direction < 0);
   }
   function closeViewer() {
     const video = mediaSlot.querySelector('video'); if (video) video.pause();
@@ -64,6 +70,28 @@
   }
   bubbles.forEach((bubble, index) => bubble.addEventListener('click', () => openGroup(index)));
   viewer.querySelector('.story-close').addEventListener('click', closeViewer);
+  deleteButton.addEventListener('click', async event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!storyId || groupIndex < 0) return;
+    const bubble = bubbles[groupIndex];
+    if (String(bubble?.dataset.storyOwnerId || '') !== currentUserId) return;
+    if (!window.confirm('Delete this Story slide? This cannot be undone.')) return;
+    deleteButton.disabled = true;
+    const status = viewer.querySelector('.story-reply-status');
+    status.textContent = 'Deleting Story…';
+    try {
+      const response = await fetch(`/api/story/${encodeURIComponent(storyId)}`, {
+        method: 'DELETE', headers: { 'Accept': 'application/json' }
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not delete this Story.');
+      window.location.reload();
+    } catch (error) {
+      status.textContent = error.message || 'Could not delete this Story.';
+      deleteButton.disabled = false;
+    }
+  });
   viewer.addEventListener('click', e => {
     if (e.target === viewer) closeViewer();
   });

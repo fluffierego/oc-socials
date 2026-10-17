@@ -1,15 +1,25 @@
-/* Centered Instagram-style Story viewer; reply controls sit below the media. */
-.story-viewer { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; box-sizing:border-box; padding:16px; overflow:auto; background:rgba(8,10,12,.96); color:#fff; }
+/* Instagram-style multi-slide Story viewer, including the owner delete control. */
+.story-viewer { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; box-sizing:border-box; padding:14px; overflow:auto; background:rgba(8,10,12,.96); color:#fff; }
 .story-viewer[hidden] { display:none !important; }
-.story-viewer-media { position:relative; flex:0 1 auto; width:min(360px, calc((100vh - 170px) * 9 / 16), calc(100vw - 32px)); aspect-ratio:9 / 16; max-height:calc(100vh - 170px); min-height:180px; overflow:hidden; isolation:isolate; background:#151515; border:1px solid rgba(255,255,255,.14); border-radius:16px; box-shadow:0 14px 42px rgba(0,0,0,.45); }
+.story-viewer-media { position:relative; flex:0 1 auto; width:min(360px, calc((100vh - 185px) * 9 / 16), calc(100vw - 32px)); aspect-ratio:9 / 16; max-height:calc(100vh - 185px); min-height:180px; overflow:hidden; isolation:isolate; background:#151515; border:1px solid rgba(255,255,255,.14); border-radius:16px; box-shadow:0 14px 42px rgba(0,0,0,.45); }
 .story-viewer-media-content, .story-viewer-media-content > img, .story-viewer-media-content > video { position:absolute; inset:0; display:block; width:100%; height:100%; }
 .story-viewer-media-content > img, .story-viewer-media-content > video { object-fit:cover; object-position:center; background:#111; }
 .story-viewer-text { position:absolute; z-index:2; top:50%; left:7%; right:7%; max-height:72%; margin:0; overflow:auto; color:#fff; font-size:clamp(18px,3.5vh,30px); font-weight:750; line-height:1.15; text-align:center; white-space:pre-wrap; overflow-wrap:anywhere; text-shadow:0 2px 5px rgba(0,0,0,.95),0 0 2px #000; transform:translateY(-50%); pointer-events:none; }
-.story-viewer .story-account, .story-viewer .story-progress { display:none !important; }
-.story-viewer .story-close { position:fixed; top:16px; right:18px; z-index:10; font-size:32px; color:#fff; background:transparent; border:0; cursor:pointer; }
+.story-viewer .story-progress { display:flex; align-items:center; gap:4px; width:min(360px, calc(100vw - 32px)); height:4px; flex:0 0 4px; }
+.story-viewer .story-progress span { display:block; flex:1 1 0; height:3px; min-width:0; border-radius:4px; background:rgba(255,255,255,.38); }
+.story-viewer .story-progress span.done, .story-viewer .story-progress span.current { background:#fff; }
+.story-viewer .story-account { display:flex; align-items:center; gap:8px; width:min(360px, calc(100vw - 32px)); min-height:34px; color:#fff; font-size:14px; }
+.story-viewer .story-account-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; flex:0 0 32px; }
+.story-viewer .story-account-name { font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.story-viewer .story-account small { opacity:.75; font-size:12px; }
+.story-viewer .story-menu { margin-left:auto; border:0; padding:2px 7px; border-radius:8px; background:transparent; color:#fff; font-size:27px; line-height:1; cursor:pointer; }
+.story-viewer .story-menu[hidden] { display:none !important; }
+.story-viewer .story-menu:disabled { opacity:.55; cursor:wait; }
+.story-viewer .story-close { position:fixed; top:10px; right:18px; z-index:10; font-size:32px; color:#fff; background:transparent; border:0; cursor:pointer; }
 .story-reply-form { display:flex; align-items:center; gap:8px; width:min(360px, calc(100vw - 32px)); box-sizing:border-box; }
 .story-reply-form select { max-width:32%; min-width:90px; }
 .story-reply-form input[name="text"] { flex:1; min-width:0; }
 .story-reply-form input, .story-reply-form select { box-sizing:border-box; height:42px; border:1px solid #555; border-radius:22px; padding:0 12px; background:#171717; color:#fff; }
 .story-reply-form button { color:#fff; background:transparent; border:0; font-size:22px; cursor:pointer; }
-.story-reply-status { width:min(360px, calc(100vw - 32px)); margin:0; color:#fff; font-size:13px; }
+.story-reply-status { width:min(360px, calc(100vw - 32px)); margin:0; color:#fff; font-size:13px; min-height:0; }
+@media (max-height:620px) { .story-viewer { gap:5px; padding:8px; } .story-viewer-media { width:min(300px, calc((100vh - 145px) * 9 / 16), calc(100vw - 24px)); max-height:calc(100vh - 145px); min-height:130px; } }
