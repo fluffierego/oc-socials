@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Following · OC Socials</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f6f7fb;color:#202124;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.topnav{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #e4e6eb;padding:13px max(16px,calc((100vw - 1000px)/2));display:flex;align-items:center;gap:18px;justify-content:space-between}.topnav b{font-size:18px}.topnav span{display:flex;gap:14px;flex-wrap:wrap}.topnav a{color:#1769aa;text-decoration:none;font-weight:600;font-size:14px}
+main{max-width:980px;margin:24px auto;padding:0 16px}.panel{background:#fff;border:1px solid #e4e6eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px #18263a08}.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.page-head h1{font-size:26px;margin:0}.muted{color:#68717f;font-size:13px}.switch-form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.switch-form label{font-size:13px;color:#68717f}.switch-form select,.tabs a,.person-action{border:1px solid #d8dce3;border-radius:10px;padding:9px 12px;background:#fff;color:#252a34;font:inherit}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.tabs a{text-decoration:none;font-size:14px;font-weight:650}.tabs a.active{background:#1d6fe8;border-color:#1d6fe8;color:white}.summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:13px}.summary a{color:#235ba6;text-decoration:none;background:#f3f7ff;padding:8px 12px;border-radius:9px;font-size:14px}.person-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}.person{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #e6e8ee;border-radius:13px;min-width:0}.avatar{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#e5e7eb;flex:0 0 auto}.person-main{flex:1;min-width:0}.person-main strong,.person-main a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.person-main a{color:#202124;text-decoration:none;font-weight:700}.person-main span{display:block;color:#717987;font-size:13px;margin-top:3px;overflow-wrap:anywhere}.person-action{font-size:12px;text-decoration:none;font-weight:700;white-space:nowrap}.feed-post{overflow:hidden;padding:0}.post-top{display:flex;align-items:center;gap:11px;padding:15px 16px}.post-top .avatar{width:44px;height:44px}.byline{flex:1;min-width:0}.byline a{font-weight:700;color:#202124;text-decoration:none}.byline small{display:block;color:#7a8290;margin-top:3px}.platform{font-size:11px;color:#56667a;background:#edf2f8;border-radius:999px;padding:5px 8px;white-space:nowrap}.post-text{padding:0 16px 14px;white-space:pre-wrap;overflow-wrap:anywhere}.feed-carousel{position:relative;background:#111;max-height:680px;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:pan-y}.feed-slides{width:100%;display:flex;justify-content:center}.feed-slide{width:100%;display:flex;justify-content:center;align-items:center}.feed-slide[hidden]{display:none!important}.feed-slide img,.feed-slide video{display:block;width:100%;max-height:680px;object-fit:contain;background:#111}.feed-arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:50%;background:#ffffffdb;color:#111;font-size:25px;cursor:pointer}.feed-prev{left:12px}.feed-next{right:12px}.feed-counter{position:absolute;top:12px;right:12px;background:#111a;color:#fff;border-radius:999px;font-size:12px;padding:5px 8px}.post-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #edf0f4}.post-bottom .muted{font-size:12px}.post-bottom a{color:#1769aa;text-decoration:none;font-weight:700;font-size:13px}.stories-row{display:flex;gap:12px;overflow:auto;padding:4px 0}.story-link{min-width:82px;text-align:center;text-decoration:none;color:#343b47;font-size:12px}.story-link img{width:62px;height:62px;object-fit:cover;border-radius:50%;padding:3px;border:2px solid #d64b97;display:block;margin:0 auto 5px}.empty{padding:26px 16px;text-align:center;color:#727b88}.empty strong{display:block;color:#303744;margin-bottom:6px}.section-title{font-size:17px;margin:0 0 14px}.search{width:100%;padding:10px 12px;border:1px solid #d8dce3;border-radius:10px;margin:0 0 14px;font:inherit}
+@media(max-width:620px){.topnav{align-items:flex-start;flex-direction:column;gap:9px}.topnav span{gap:12px}.page-head h1{font-size:23px}.post-bottom{align-items:flex-start}.feed-slide img,.feed-slide video{max-height:520px}}
+</style>
+</head>
+<body>
+<nav class="topnav"><b>OC Socials · Following</b><span><a href="/instagram">Instagram</a><a href="/twitter">Twitter/X</a><a href="/instagram/dms">Instagram DMs</a><a href="/messages">iMessage</a></span></nav>
+<main>
+  <section class="panel">
+    <div class="page-head"><div><h1>Your circle</h1><div class="muted">See your followed OCs' latest posts and connections in one place.</div></div>
+      <form class="switch-form" action="/following" method="get"><label for="following-oc-switcher">View as OC</label><select id="following-oc-switcher" name="oc_id" {% if not owned_ocs %}disabled{% endif %} onchange="this.form.submit()">{% for oc in owned_ocs %}<option value="{{oc['id']}}" {% if oc['id']==active_oc_id %}selected{% endif %}>{{oc['name']}} (@{{oc['username']}})</option>{% endfor %}</select><input type="hidden" name="view" value="{{view}}"></form>
+    </div>
+    {% if active_oc_id %}
+    <div class="summary"><a href="/following?oc_id={{active_oc_id}}&view=following">Following <strong>{{following_count}}</strong></a><a href="/following?oc_id={{active_oc_id}}&view=followers">Followers <strong>{{follower_count}}</strong></a></div>
+    <div class="tabs"><a href="/following?oc_id={{active_oc_id}}&view=feed" class="{% if view=='feed' %}active{% endif %}">Following feed</a><a href="/following?oc_id={{active_oc_id}}&view=following" class="{% if view=='following' %}active{% endif %}">Following list</a><a href="/following?oc_id={{active_oc_id}}&view=followers" class="{% if view=='followers' %}active{% endif %}">Followers list</a></div>
+    {% endif %}
+  </section>
+
+  {% if not owned_ocs %}
+    <section class="panel empty"><strong>You need an OC first.</strong>Create an OC, then come back to follow friends and build a feed.</section>
+  {% elif view=='following' or view=='followers' %}
+    <section class="panel"><h2 class="section-title">{% if view=='following' %}OCs followed by {{owned_ocs|selectattr('id','equalto',active_oc_id)|map(attribute='name')|first}}{% else %}OCs following {{owned_ocs|selectattr('id','equalto',active_oc_id)|map(attribute='name')|first}}{% endif %}</h2>
+      <input class="search" type="search" placeholder="Search usernames or names…" aria-label="Search connections" data-person-search>
+      {% set list_items = following_ocs if view=='following' else follower_ocs %}
+      {% if list_items %}<div class="person-list">{% for item in list_items %}<article class="person" data-person-card><img class="avatar" src="{{item['avatar'] or '/static/default-avatar.png'}}" alt=""><div class="person-main"><a href="{{ url_for('profile', oc_id=item['id']) }}">{{item['name']}}</a><span>@{{item['username']}}</span>{% if item['bio'] %}<span>{{item['bio']}}</span>{% endif %}</div><a class="person-action" href="{{ url_for('profile', oc_id=item['id']) }}">View OC</a></article>{% endfor %}</div>
+      {% else %}<div class="empty"><strong>{% if view=='following' %}Not following anyone yet{% else %}No followers yet{% endif %}</strong>{% if view=='following' %}Open an OC profile and press Follow to add it to this list.{% else %}When other OCs follow this one, they'll appear here.{% endif %}</div>{% endif %}
+    </section>
+  {% else %}
+    {% if stories %}<section class="panel"><h2 class="section-title">Stories from people you follow</h2><div class="stories-row">{% for story in stories %}<a class="story-link" href="/instagram?oc_id={{active_oc_id}}"><img src="{{story['avatar'] or story['media_url']}}" alt=""><span>@{{story['username']}}</span></a>{% endfor %}</div></section>{% endif %}
+    {% if posts %}{% for p in posts %}<article class="panel feed-post" id="post-{{p['id']}}">
+      <div class="post-top"><img class="avatar" src="{{p['avatar'] or '/static/default-avatar.png'}}" alt=""><div class="byline"><a href="{{ url_for('profile', oc_id=p['author_oc_id']) }}">{{p['name']}}</a><small>@{{p['username']}} · {{p['created_at']}}</small></div><span class="platform">{% if p['platform']=='instagram' %}Instagram{% else %}Twitter/X{% endif %}</span></div>
+      {% if p['media_items'] %}<div class="feed-carousel" data-feed-carousel><div class="feed-slides">{% for media in p['media_items'] %}<div class="feed-slide" data-feed-slide {% if not loop.first %}hidden{% endif %}>{% if media['media_type']=='video' %}<video src="{{media['media_url']}}" controls playsinline preload="metadata"></video>{% else %}<img src="{{media['media_url']}}" alt="Post media {{loop.index}}" loading="lazy">{% endif %}</div>{% endfor %}</div>{% if p['media_items']|length > 1 %}<button class="feed-arrow feed-prev" type="button" data-feed-prev aria-label="Previous photo">‹</button><button class="feed-arrow feed-next" type="button" data-feed-next aria-label="Next photo">›</button><span class="feed-counter" data-feed-counter>1/{{p['media_items']|length}}</span>{% endif %}</div>{% endif %}
+      {% if p['text'] %}<div class="post-text">{{p['text']}}</div>{% endif %}
+      <div class="post-bottom"><span class="muted">♥ {{p['like_count'] or 0}} likes</span><a href="{% if p['platform']=='instagram' %}/instagram?oc_id={{active_oc_id}}#post-{{p['id']}}{% else %}/twitter?oc_id={{active_oc_id}}#post-{{p['id']}}{% endif %}">Open post to like & comment →</a></div>
+    </article>{% endfor %}
+    {% else %}<section class="panel empty"><strong>Your feed is quiet for now.</strong>Follow an OC to see its Instagram and Twitter/X posts here automatically.</section>{% endif %}
+  {% endif %}
+</main>
+<script>
+(function(){
+  document.querySelectorAll('[data-feed-carousel]').forEach(function(carousel){
+    var slides=Array.from(carousel.querySelectorAll('[data-feed-slide]'));
+    if(slides.length<2)return;var idx=0;var count=carousel.querySelector('[data-feed-counter]');
+    function show(next){idx=(next+slides.length)%slides.length;slides.forEach(function(slide,i){slide.hidden=i!==idx;});if(count)count.textContent=(idx+1)+'/'+slides.length;}
+    var prev=carousel.querySelector('[data-feed-prev]'),next=carousel.querySelector('[data-feed-next]');if(prev)prev.addEventListener('click',function(){show(idx-1)});if(next)next.addEventListener('click',function(){show(idx+1)});
+    var x=0;carousel.addEventListener('touchstart',function(e){x=e.changedTouches[0].clientX},{passive:true});carousel.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-x;if(Math.abs(dx)>45)show(idx+(dx<0?1:-1));},{passive:true});
+  });
+  var search=document.querySelector('[data-person-search]');if(search)search.addEventListener('input',function(){var q=search.value.toLowerCase().trim();document.querySelectorAll('[data-person-card]').forEach(function(card){card.hidden=!card.textContent.toLowerCase().includes(q);});});
+})();
+</script>
+</body>
+</html>
