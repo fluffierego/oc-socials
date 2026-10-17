@@ -1171,6 +1171,88 @@ def twitter_profile(oc_id):
     )
 
 
+
+@app.route("/following")
+@login_required
+def following_feed():
+    """Show followed OCs' latest posts and the selected OC's following/follower lists."""
+    user = current_user()
+    c = conn()
+    owned_ocs = c.execute(
+        "SELECT id, name, username, avatar, owner_id FROM ocs WHERE owner_id=? ORDER BY name",
+        (user["id"],),
+    ).fetchall()
+    owned_ids = {int(row["id"]) for row in owned_ocs}
+    requested_oc_id = request.args.get("oc_id", type=int)
+    if requested_oc_id in owned_ids:
+        active_oc_id = requested_oc_id
+    else:
+        active_oc_id = int(owned_ocs[0]["id"]) if owned_ocs else None
+
+    view = (request.args.get("view", "feed") or "feed").lower()
+    if view not in {"feed", "following", "followers"}:
+        view = "feed"
+
+    following_ocs = []
+    follower_ocs = []
+    posts = []
+    stories = []
+    follower_count = 0
+    following_count = 0
+
+    if active_oc_id:
+        following_ocs = c.execute("""
+            SELECT o.id, o.name, o.username, o.avatar, o.bio, o.owner_id, f.created_at
+            FROM oc_follows f JOIN ocs o ON o.id=f.followed_oc_id
+            WHERE f.follower_oc_id=?
+            ORDER BY lower(o.username), lower(o.name)
+        """, (active_oc_id,)).fetchall()
+        follower_ocs = c.execute("""
+            SELECT o.id, o.name, o.username, o.avatar, o.bio, o.owner_id, f.created_at
+            FROM oc_follows f JOIN ocs o ON o.id=f.follower_oc_id
+            WHERE f.followed_oc_id=?
+            ORDER BY lower(o.username), lower(o.name)
+        """, (active_oc_id,)).fetchall()
+        following_count = len(following_ocs)
+        follower_count = len(follower_ocs)
+
+        # Feed is limited to posts from accounts this OC follows, across Instagram and Twitter/X.
+        if view == "feed":
+            posts = c.execute("""
+                SELECT p.*, o.name, o.username, o.avatar,
+                       o.id AS author_oc_id, o.owner_id AS author_owner_id,
+                       CASE WHEN p.platform='instagram' THEN
+                           (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id=p.id) +
+                           (SELECT COUNT(*) FROM oc_post_likes opl WHERE opl.post_id=p.id)
+                       ELSE
+                           (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id=p.id) +
+                           (SELECT COUNT(*) FROM oc_tweet_likes otl WHERE otl.post_id=p.id)
+                       END AS like_count
+                FROM posts p
+                JOIN ocs o ON o.id=p.oc_id
+                JOIN oc_follows f ON f.followed_oc_id=o.id AND f.follower_oc_id=?
+                WHERE p.platform IN ('instagram', 'twitter')
+                ORDER BY p.id DESC
+                LIMIT 100
+            """, (active_oc_id,)).fetchall()
+            posts = _attach_post_media(posts)
+            stories = c.execute("""
+                SELECT s.*, o.name, o.username, o.avatar, o.id AS author_oc_id
+                FROM stories s JOIN ocs o ON o.id=s.oc_id
+                JOIN oc_follows f ON f.followed_oc_id=o.id AND f.follower_oc_id=?
+                WHERE s.expires_at > CURRENT_TIMESTAMP
+                ORDER BY s.created_at DESC LIMIT 30
+            """, (active_oc_id,)).fetchall()
+
+    c.close()
+    return render_template(
+        "following.html", user=user, owned_ocs=owned_ocs,
+        active_oc_id=active_oc_id, view=view, posts=posts,
+        following_ocs=following_ocs, follower_ocs=follower_ocs,
+        follower_count=follower_count, following_count=following_count,
+        stories=stories,
+    )
+
 @app.route("/messages")
 @login_required
 def messages():
