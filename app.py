@@ -850,16 +850,20 @@ def reply_to_story(story_id):
                o.owner_id AS story_owner_id, o.username AS story_username
         FROM stories s JOIN ocs o ON o.id=s.oc_id
         WHERE s.id=? AND s.expires_at > CURRENT_TIMESTAMP""", (story_id,)).fetchone()
-    if not story:
-        c.close()
-        return jsonify(error="This Story has expired or is unavailable."), 404
- if int(story["story_oc_id"]) == int(oc_id):
-        c.close()
-        return jsonify(error="You can't reply to your own Story."), 400
+    
+if not story:
+         c.close()
+        return jsonify(error="This Story has expired or is unavailable."), 404 
 
-    try:
-        conversation_id = _get_or_create_instagram_dm(c, oc_id, int(story["story_oc_id"]))
+if int(story["story_oc_id"]) == int(oc_id):    
+      c.close()
+      return jsonify(error="You can't reply to your own Story."), 400
+
+try:
+            
+  conversation_id = _get_or_create_instagram_dm(c, oc_id, int(story["story_oc_id"]))
         c.execute("""INSERT INTO instagram_dm_messages
+        
             (conversation_id, sender_oc_id, text, story_id, story_media_url, story_media_type, story_text, story_username)
             VALUES(?,?,?,?,?,?,?,?)""",
             (conversation_id, oc_id, text, story_id, story["story_media_url"],
