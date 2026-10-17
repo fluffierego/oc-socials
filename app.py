@@ -1647,6 +1647,9 @@ def profile(oc_id):
         c.close()
         return "Not found", 404
     posts = c.execute("SELECT * FROM posts WHERE oc_id=? AND platform='instagram' ORDER BY id DESC", (oc_id,)).fetchall()
+    posts = _attach_post_media(posts)
+    is_owner = int(oc["owner_id"]) == int(user["id"])
+    owned_ocs = c.execute("SELECT id, name, username, avatar FROM ocs WHERE owner_id=? ORDER BY name", (user["id"],)).fetchall()
     mutual_connections = []
     if int(oc["owner_id"]) != int(user["id"]):
         mutual_connections = c.execute("""SELECT DISTINCT mutual.id, mutual.name, mutual.username, mutual.avatar
@@ -1659,8 +1662,8 @@ def profile(oc_id):
             ORDER BY mutual.username""",
             (oc_id, user["id"], oc_id, oc_id, user["id"])).fetchall()
     c.close()
-    return render_template("profile.html", oc=oc, posts=posts, user=user,
-                           mutual_connections=mutual_connections,
+    return render_template("profile.html", oc=oc, posts=posts, user=user, owned_ocs=owned_ocs,
+                           is_owner=is_owner, mutual_connections=mutual_connections,
                            mutual_count=len(mutual_connections))
 
 
@@ -1721,6 +1724,30 @@ def toggle_oc_follow():
     ).fetchone()[0]
     c.close()
     return jsonify(ok=True, following=following, followers=followers, following_count=following_count)
+
+
+@app.route("/api/oc-remove-follower", methods=["POST"])
+@login_required
+def remove_oc_follower():
+    """Let an OC owner remove another OC's follow from their own OC."""
+    data = request.get_json(silent=True) or request.form
+    try:
+        target_oc_id = int(data.get("target_oc_id"))
+        follower_oc_id = int(data.get("follower_oc_id"))
+    except (TypeError, ValueError):
+        return jsonify(error="Invalid follower selection."), 400
+    user = current_user()
+    c = conn()
+    target = c.execute("SELECT id FROM ocs WHERE id=? AND owner_id=?", (target_oc_id, user["id"])).fetchone()
+    follower = c.execute("SELECT id FROM ocs WHERE id=?", (follower_oc_id,)).fetchone()
+    if not target or not follower:
+        c.close()
+        return jsonify(error="You can only remove a follower from one of your own OCs."), 403
+    c.execute("DELETE FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?", (follower_oc_id, target_oc_id))
+    c.commit()
+    followers = c.execute("SELECT COUNT(*) FROM oc_follows WHERE followed_oc_id=?", (target_oc_id,)).fetchone()[0]
+    c.close()
+    return jsonify(ok=True, followers=followers)
 
 
 @app.route("/api/post/delete", methods=["POST"])
