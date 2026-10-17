@@ -1,3 +1,34 @@
+// Render saved post/comment creation times as relative timestamps.
+(function updateRelativeTimestamps() {
+  function parseSavedDate(raw) {
+    if (!raw) return null;
+    let value = String(raw).trim();
+    if (/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$/.test(value)) value = value.replace(' ', 'T') + 'Z';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  function relativeLabel(date) {
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 45) return 'Just now';
+    if (seconds < 3600) { const n = Math.floor(seconds / 60); return `${n} minute${n === 1 ? '' : 's'} ago`; }
+    if (seconds < 86400) { const n = Math.floor(seconds / 3600); return `${n} hour${n === 1 ? '' : 's'} ago`; }
+    if (seconds < 604800) { const n = Math.floor(seconds / 86400); return `${n} day${n === 1 ? '' : 's'} ago`; }
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  }
+  function refresh() {
+    document.querySelectorAll('time.relative-time[data-created-at]').forEach(node => {
+      const date = parseSavedDate(node.dataset.createdAt);
+      if (!date) { node.textContent = 'Date unavailable'; return; }
+      node.textContent = relativeLabel(date);
+      node.dateTime = date.toISOString();
+      node.title = date.toLocaleString();
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refresh, { once: true });
+  else refresh();
+  setInterval(refresh, 60000);
+})();
+
 document.querySelectorAll(".reply-form").forEach(form => {
   const fileInput = form.querySelector('input[name="media_file"]');
   const urlInput = form.querySelector('input[name="media_url"]');
