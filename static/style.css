@@ -720,3 +720,59 @@
   .ig-carousel .carousel-next { width: 34px; height: 34px; }
 }
 
+
+/* ===== OC Socials site-wide dark theme (CSS-only overrides) ===== */
+:root {
+  color-scheme: dark;
+  --ocs-bg: #0b0b0f;
+  --ocs-surface: #15151b;
+  --ocs-surface-raised: #1d1d25;
+  --ocs-border: #30303b;
+  --ocs-text: #f4f2f8;
+  --ocs-muted: #b6b2c2;
+  --ocs-accent: #b66cff;
+  --ocs-accent-hover: #ca91ff;
+}
+html, body { background: var(--ocs-bg) !important; color: var(--ocs-text); }
+body { background-image: none; }
+nav, header, footer, aside, .sidebar, .topbar, .navbar {
+  background: var(--ocs-surface) !important; color: var(--ocs-text); border-color: var(--ocs-border) !important;
+}
+main, section, article, .hero, .card, .post, .tweet, .profile, .oc-card,
+.ig-post, .instagram-post, .tweet-card, .modal-content, .dropdown-menu,
+.settings-card, .notification, .conversation, .chat-container, .message-list,
+.messages-container, .group-chat, .chat-header, .imessage-shell {
+  background-color: var(--ocs-surface) !important; color: var(--ocs-text); border-color: var(--ocs-border) !important;
+}
+.imessage-header { background: var(--ocs-surface-raised) !important; border-color: var(--ocs-border) !important; }
+.reply, .comment, .comments, .post-footer, .post-header, .tweet-header,
+.profile-body, .profile-posts, .oc-card, .members, .message, .chat-list-item {
+  border-color: var(--ocs-border) !important; color: var(--ocs-text);
+}
+a { color: var(--ocs-accent); }
+a:hover { color: var(--ocs-accent-hover); }
+.btn, button, input[type="submit"], input[type="button"], .button, .primary {
+  background: var(--ocs-accent); color: #170d20; border-color: transparent;
+}
+.btn:hover, button:hover, input[type="submit"]:hover, .button:hover, .primary:hover {
+  background: var(--ocs-accent-hover);
+}
+.secondary, button.secondary, .btn.secondary { background: #2a2933 !important; color: var(--ocs-text) !important; border: 1px solid var(--ocs-border) !important; }
+input, textarea, select, option, .search input, .reply-form input, .reply-form select {
+  background: #101016 !important; color: var(--ocs-text) !important; border-color: #41404d !important;
+}
+input::placeholder, textarea::placeholder { color: #9691a4; opacity: 1; }
+label, small, .muted, .timestamp, .meta, .subtext { color: var(--ocs-muted); }
+hr { border: 0; border-top: 1px solid var(--ocs-border); }
+.error, .alert-error { background: #3a171d !important; color: #ffb8c0 !important; }
+.success, .alert-success { background: #153324 !important; color: #b8f5d0 !important; }
+.banner { background-color: #25232d; }
+.profile-avatar { border-color: var(--ocs-surface) !important; }
+.ig-carousel { background: #101016 !important; }
+.ig-carousel .carousel-prev, .ig-carousel .carousel-next { background: rgba(25, 23, 32, .9); color: #fff; }
+.imessage-shell { box-shadow: 0 4px 24px #0008; }
+/* Keep media, avatars and uploaded photos at their original colors. */
+img, video { color-scheme: light; }
+@media (prefers-color-scheme: light) {
+  html, body { background: var(--ocs-bg) !important; color: var(--ocs-text); }
+}
