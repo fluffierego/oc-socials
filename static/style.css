@@ -776,3 +776,40 @@ img, video { color-scheme: light; }
 @media (prefers-color-scheme: light) {
   html, body { background: var(--ocs-bg) !important; color: var(--ocs-text); }
 }
+
+/* ===== OC Socials: white lettering across every page ===== */
+html, body, body * {
+  color: #ffffff !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #ffffff !important;
+  opacity: 0.8;
+}
+
+a,
+a:hover,
+a:visited {
+  color: #ffffff !important;
+}
+
+button,
+.btn,
+.button,
+input[type="submit"],
+input[type="button"],
+.primary,
+.secondary {
+  color: #ffffff !important;
+}
+
+label,
+small,
+.muted,
+.timestamp,
+.meta,
+.subtext {
+  color: #ffffff !important;
+}
+
