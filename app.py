@@ -195,39 +195,16 @@ def init():
             id BIGSERIAL PRIMARY KEY, post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
             media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', position INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        # Additive migration: allow image/GIF attachments on Instagram and Twitter comments.
-        c.execute("ALTER TABLE replies ADD COLUMN IF NOT EXISTS media_url TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE replies ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS stories (
             id BIGSERIAL PRIMARY KEY, oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
             media_url TEXT NOT NULL, media_type TEXT NOT NULL DEFAULT 'image', text_overlay TEXT DEFAULT '',
             text_color TEXT DEFAULT '#ffffff', text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
-            story_group_id TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP NOT NULL)""")
-        c.execute("ALTER TABLE stories ADD COLUMN IF NOT EXISTS story_group_id TEXT NOT NULL DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS story_replies (
             id BIGSERIAL PRIMARY KEY,
             story_id BIGINT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
             oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
             text TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        c.execute("""CREATE TABLE IF NOT EXISTS instagram_dm_conversations (
-            id BIGSERIAL PRIMARY KEY,
-            oc_low_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-            oc_high_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(oc_low_id, oc_high_id))""")
-        c.execute("""CREATE TABLE IF NOT EXISTS instagram_dm_messages (
-            id BIGSERIAL PRIMARY KEY,
-            conversation_id BIGINT NOT NULL REFERENCES instagram_dm_conversations(id) ON DELETE CASCADE,
-            sender_oc_id BIGINT NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-            text TEXT NOT NULL DEFAULT '',
-            image_url TEXT NOT NULL DEFAULT '',
-            story_id BIGINT,
-            story_media_url TEXT NOT NULL DEFAULT '',
-            story_media_type TEXT NOT NULL DEFAULT 'image',
-            story_text TEXT NOT NULL DEFAULT '',
-            story_username TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS oc_post_likes (
             post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -299,7 +276,6 @@ def init():
       text_overlay TEXT DEFAULT '',
       text_color TEXT DEFAULT '#ffffff',
       text_background TEXT DEFAULT 'rgba(0,0,0,.35)',
-      story_group_id TEXT NOT NULL DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL
     );
@@ -308,26 +284,6 @@ def init():
       story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
       oc_id INTEGER NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
       text TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS instagram_dm_conversations(
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      oc_low_id INTEGER NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-      oc_high_id INTEGER NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(oc_low_id, oc_high_id)
-    );
-    CREATE TABLE IF NOT EXISTS instagram_dm_messages(
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL REFERENCES instagram_dm_conversations(id) ON DELETE CASCADE,
-      sender_oc_id INTEGER NOT NULL REFERENCES ocs(id) ON DELETE CASCADE,
-      text TEXT NOT NULL DEFAULT '',
-      image_url TEXT NOT NULL DEFAULT '',
-      story_id INTEGER,
-      story_media_url TEXT NOT NULL DEFAULT '',
-      story_media_type TEXT NOT NULL DEFAULT 'image',
-      story_text TEXT NOT NULL DEFAULT '',
-      story_username TEXT NOT NULL DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS discord_outbox(
@@ -423,15 +379,8 @@ def init():
     reply_columns = {row["name"] for row in c.execute("PRAGMA table_info(replies)").fetchall()}
     if "parent_id" not in reply_columns:
         c.execute("ALTER TABLE replies ADD COLUMN parent_id INTEGER")
-    if "media_url" not in reply_columns:
-        c.execute("ALTER TABLE replies ADD COLUMN media_url TEXT NOT NULL DEFAULT ''")
-    if "media_type" not in reply_columns:
-        c.execute("ALTER TABLE replies ADD COLUMN media_type TEXT NOT NULL DEFAULT ''")
     if "discord_avatar" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN discord_avatar TEXT DEFAULT ''")
-    story_columns = {row["name"] for row in c.execute("PRAGMA table_info(stories)").fetchall()}
-    if "story_group_id" not in story_columns:
-        c.execute("ALTER TABLE stories ADD COLUMN story_group_id TEXT NOT NULL DEFAULT ''")
     chat_columns = {row["name"] for row in c.execute("PRAGMA table_info(chats)").fetchall()}
     if "owner_id" not in chat_columns:
         c.execute("ALTER TABLE chats ADD COLUMN owner_id INTEGER DEFAULT 0")
@@ -755,30 +704,9 @@ def instagram():
                     o.owner_id AS author_owner_id
         FROM stories s JOIN ocs o ON o.id=s.oc_id
         WHERE s.expires_at > CURRENT_TIMESTAMP ORDER BY s.created_at DESC""").fetchall()
-    story_groups = []
-    group_index = {}
-    for story in stories:
-        row = dict(story)
-        # Use the visible account identity as well as owner so duplicate OC
-        # records with the same username do not create duplicate Story bubbles.
-        username_key = str(row.get("username") or "").strip().casefold()
-        owner_key = str(row.get("author_owner_id") or "")
-        key = f"owner-{owner_key}-username-{username_key}" if username_key else f"owner-{owner_key}-oc-{row['oc_id']}"
-        if key not in group_index:
-            group_index[key] = {"key": key, "oc_id": row["oc_id"], "username": row["username"],
-                                "avatar": row["avatar"], "name": row["name"],
-                                "owner_id": row["author_owner_id"], "slides": []}
-            story_groups.append(group_index[key])
-        group_index[key]["slides"].append({
-            "id": row["id"], "oc_id": row["oc_id"], "media_url": row["media_url"],
-            "media_type": row["media_type"], "text_overlay": row.get("text_overlay") or "",
-            "text_color": row.get("text_color") or "#ffffff"
-        })
-    for group in story_groups:
-        group["slides"].reverse()
     c.close()
     return render_template(
-        "instagram.html", posts=post_rows, replies=replies, stories=stories, story_groups=story_groups,
+        "instagram.html", posts=post_rows, replies=replies, stories=stories,
         user=user, owned_ocs=owned_ocs, active_oc_id=active_oc_id
     )
 
@@ -795,103 +723,46 @@ def create_story():
     if not oc:
         c.close()
         return jsonify(error="You don't own that OC."), 403
-    uploads = [f for f in request.files.getlist("story_media") if f and f.filename]
-    if not uploads:
-        # Backward-compatible single-file form handling.
-        single = request.files.get("story_media")
-        if single and single.filename:
-            uploads = [single]
-    if not uploads:
+    uploaded = request.files.get("story_media")
+    if not uploaded or not uploaded.filename:
         c.close()
-        return jsonify(error="Choose one or more photos or videos for your Story."), 400
-    if len(uploads) > 10:
-        c.close()
-        return jsonify(error="You can add up to 10 slides to one Story."), 400
+        return jsonify(error="Choose a photo or video for your Story."), 400
+    ext = os.path.splitext(uploaded.filename)[1].lower()
     image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
     video_exts = {".mp4", ".webm", ".mov", ".m4v"}
-    prepared = []
-    for uploaded in uploads:
-        ext = os.path.splitext(uploaded.filename)[1].lower()
-        if ext not in image_exts | video_exts:
-            c.close()
-            return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V."), 400
-        uploaded.stream.seek(0, 2)
-        size = uploaded.stream.tell()
-        uploaded.stream.seek(0)
-        if size > 50 * 1024 * 1024:
-            c.close()
-            return jsonify(error="Each Story slide must be 50 MB or smaller."), 400
-        prepared.append((uploaded, ext, "video" if ext in video_exts else "image"))
-    overlay = request.form.get("text_overlay", "").strip()[:500]
-    text_color = request.form.get("text_color", "#ffffff")
-    if text_color not in {"#ffffff", "#000000", "#ffcc00", "#ff5c8a", "#8be9fd"}:
-        text_color = "#ffffff"
-    expires_at = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 86400))
-    group_id = uuid.uuid4().hex
+    if ext not in image_exts | video_exts:
+        c.close()
+        return jsonify(error="Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, or M4V."), 400
+    uploaded.stream.seek(0, 2)
+    size = uploaded.stream.tell()
+    uploaded.stream.seek(0)
+    if size > 50 * 1024 * 1024:
+        c.close()
+        return jsonify(error="Story media must be 50 MB or smaller."), 400
+    media_type = "video" if ext in video_exts else "image"
     try:
-        for uploaded, ext, media_type in prepared:
-            media_url = store_post_photo(uploaded, f"story_{uuid.uuid4().hex}{ext}")
-            c.execute("INSERT INTO stories(oc_id,media_url,media_type,text_overlay,text_color,story_group_id,expires_at) VALUES(?,?,?,?,?,?,?)",
-                      (oc_id, media_url, media_type, overlay, text_color, group_id, expires_at))
+        media_url = store_post_photo(uploaded, f"story_{uuid.uuid4().hex}{ext}")
     except Exception as exc:
         c.close()
         print(f"Story upload failed: {exc}")
         return jsonify(error="Could not store the Story. Check Supabase Storage configuration."), 502
+    overlay = request.form.get("text_overlay", "").strip()[:500]
+    text_color = request.form.get("text_color", "#ffffff")
+    if text_color not in {"#ffffff", "#000000", "#ffcc00", "#ff5c8a", "#8be9fd"}:
+        text_color = "#ffffff"
+    # SQLite and PostgreSQL both accept this UTC timestamp format for comparison.
+    expires_at = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 86400))
+    c.execute("INSERT INTO stories(oc_id,media_url,media_type,text_overlay,text_color,expires_at) VALUES(?,?,?,?,?,?)",
+              (oc_id, media_url, media_type, overlay, text_color, expires_at))
     c.commit()
     c.close()
     return redirect(url_for("instagram"))
 
 
-def _get_or_create_instagram_dm(c, oc_a_id, oc_b_id):
-    """Return a stable DM conversation id for a pair of OCs."""
-    low_id, high_id = sorted((int(oc_a_id), int(oc_b_id)))
-    row = c.execute(
-        "SELECT id FROM instagram_dm_conversations WHERE oc_low_id=? AND oc_high_id=?",
-        (low_id, high_id),
-    ).fetchone()
-    if row:
-        return int(row["id"])
-    c.execute(
-        "INSERT INTO instagram_dm_conversations(oc_low_id, oc_high_id) VALUES(?,?)",
-        (low_id, high_id),
-    )
-    return int(c.execute("SELECT last_insert_rowid()").fetchone()[0])
-
-
-@app.route("/api/story/<int:story_id>", methods=["DELETE", "POST"])
-@login_required
-def delete_story(story_id):
-    """Delete one Story slide owned by the current user."""
-    user = current_user()
-    c = conn()
-    story = c.execute(
-        "SELECT s.id, o.owner_id FROM stories s JOIN ocs o ON o.id=s.oc_id WHERE s.id=?",
-        (story_id,),
-    ).fetchone()
-    if not story:
-        c.close()
-        return jsonify(error="This Story is already deleted or unavailable."), 404
-    if int(story["owner_id"]) != int(user["id"]):
-        c.close()
-        return jsonify(error="You can only delete Stories posted by your own OCs."), 403
-    try:
-        # Remove legacy reply rows explicitly so a database without active
-        # foreign-key cascades cannot block Story deletion.
-        c.execute("DELETE FROM story_replies WHERE story_id=?", (story_id,))
-        c.execute("DELETE FROM stories WHERE id=?", (story_id,))
-        c.commit()
-    except Exception as exc:
-        c.close()
-        print(f"Story deletion failed: {exc}")
-        return jsonify(error=f"Could not delete this Story: {type(exc).__name__}. Please try again."), 500
-    c.close()
-    return jsonify(ok=True)
-
-
 @app.route("/api/story/<int:story_id>/reply", methods=["POST"])
 @login_required
 def reply_to_story(story_id):
-    """Turn a Story reply into the first message of an Instagram DM thread."""
+    """Send a private reply to an active Instagram Story as an owned OC."""
     data = request.get_json(silent=True) or request.form
     try:
         oc_id = int(data.get("oc_id", ""))
@@ -903,257 +774,47 @@ def reply_to_story(story_id):
     if len(text) > 1000:
         return jsonify(error="Story replies must be 1,000 characters or fewer."), 400
 
-    user = current_user()
     c = conn()
-    oc = c.execute(
-        "SELECT id, username, owner_id FROM ocs WHERE id=? AND owner_id=?",
-        (oc_id, user["id"]),
-    ).fetchone()
+    oc = c.execute("SELECT id, username FROM ocs WHERE id=? AND owner_id=?",
+                    (oc_id, current_user()["id"])).fetchone()
     if not oc:
         c.close()
         return jsonify(error="You can only reply as one of your own OCs."), 403
-
-    story = c.execute("""SELECT s.id, s.oc_id AS story_oc_id, s.media_url AS story_media_url,
-               s.media_type AS story_media_type, s.text_overlay AS story_text,
-               o.owner_id AS story_owner_id, o.username AS story_username
+    story = c.execute("""SELECT s.id, o.owner_id AS story_owner_id, o.username AS story_username
         FROM stories s JOIN ocs o ON o.id=s.oc_id
         WHERE s.id=? AND s.expires_at > CURRENT_TIMESTAMP""", (story_id,)).fetchone()
-    
-
     if not story:
         c.close()
         return jsonify(error="This Story has expired or is unavailable."), 404
-
-    if int(story["story_oc_id"]) == int(oc_id):
+    if int(story["story_owner_id"]) == int(current_user()["id"]):
         c.close()
         return jsonify(error="You can't reply to your own Story."), 400
 
-    try:
-        conversation_id = _get_or_create_instagram_dm(
-            c, oc_id, int(story["story_oc_id"])
-        )
-        c.execute(
-            """INSERT INTO instagram_dm_messages
-            (conversation_id, sender_oc_id, text, story_id, story_media_url, story_media_type, story_text, story_username)
-            VALUES(?,?,?,?,?,?,?,?)""",
-            (
-                conversation_id,
-                oc_id,
-                text,
-                story_id,
-                story["story_media_url"],
-                story["story_media_type"] or "image",
-                story["story_text"] or "",
-                story["story_username"] or "",
-            ),
-        )
-        c.commit()
-    except Exception as exc:
-        c.rollback()
-        print(f"Instagram Story-to-DM failed: {exc}")
-        c.close()
-        return jsonify(error="Couldn't open the Instagram DM for this Story. Please try again."), 500
-
+    c.execute("INSERT INTO story_replies(story_id, oc_id, text) VALUES(?,?,?)",
+              (story_id, oc_id, text))
+    c.commit()
     c.close()
-    return jsonify(
-    ok=True,
-    message=f"Story reply sent to @{story['story_username']}.",
-    conversation_id=conversation_id,
-    conversation_url=url_for(
-        "instagram_dm_conversation",
-        conversation_id=conversation_id
-    ),
-)
+    return jsonify(ok=True, message=f"Reply sent privately to @{story['story_username']}.")
+
 
 @app.route("/api/story/<int:story_id>/replies", methods=["GET"])
 @login_required
 def get_story_replies(story_id):
-    """Allow only the Story owner to view its private replies, with links into DMs."""
-    user = current_user()
+    """Allow only the Story owner to view its private replies."""
     c = conn()
     story = c.execute("""SELECT s.id, o.owner_id AS story_owner_id
         FROM stories s JOIN ocs o ON o.id=s.oc_id WHERE s.id=?""", (story_id,)).fetchone()
     if not story:
         c.close()
         return jsonify(error="Story not found."), 404
-    if int(story["story_owner_id"]) != int(user["id"]):
+    if int(story["story_owner_id"]) != int(current_user()["id"]):
         c.close()
         return jsonify(error="Only the Story owner can view replies."), 403
-
-    # Legacy replies created before Story replies became DM messages.
-    legacy_rows = c.execute("""SELECT sr.id, sr.text, sr.created_at, o.name, o.username, o.avatar,
-                    NULL AS conversation_id
+    rows = c.execute("""SELECT sr.id, sr.text, sr.created_at, o.name, o.username, o.avatar
         FROM story_replies sr JOIN ocs o ON o.id=sr.oc_id
         WHERE sr.story_id=? ORDER BY sr.id""", (story_id,)).fetchall()
-    dm_rows = c.execute("""SELECT m.id, m.text, m.created_at, o.name, o.username, o.avatar,
-                    d.id AS conversation_id
-        FROM instagram_dm_messages m
-        JOIN instagram_dm_conversations d ON d.id=m.conversation_id
-        JOIN ocs o ON o.id=m.sender_oc_id
-        WHERE m.story_id=? AND o.owner_id<>?
-        ORDER BY m.id""", (story_id, user["id"])).fetchall()
     c.close()
-    replies = []
-    for row in list(legacy_rows) + list(dm_rows):
-        item = dict(row)
-        item["conversation_url"] = (
-            url_for("instagram_dm_conversation", conversation_id=int(item["conversation_id"]))
-            if item.get("conversation_id") else ""
-        )
-        replies.append(item)
-    replies.sort(key=lambda item: str(item.get("created_at") or ""))
-    return jsonify(ok=True, replies=replies)
-
-
-@app.route("/instagram/dms")
-@login_required
-def instagram_dms():
-    """Instagram-style DM inbox, separate from the OC iMessage feature."""
-    user = current_user()
-    c = conn()
-    rows = c.execute("""SELECT d.id, d.created_at,
-          lo.id AS low_oc_id, lo.name AS low_name, lo.username AS low_username,
-          lo.avatar AS low_avatar, lo.owner_id AS low_owner_id,
-          hi.id AS high_oc_id, hi.name AS high_name, hi.username AS high_username,
-          hi.avatar AS high_avatar, hi.owner_id AS high_owner_id,
-          (SELECT text FROM instagram_dm_messages m WHERE m.conversation_id=d.id ORDER BY m.id DESC LIMIT 1) AS last_text,
-          (SELECT image_url FROM instagram_dm_messages m WHERE m.conversation_id=d.id ORDER BY m.id DESC LIMIT 1) AS last_image_url,
-          (SELECT story_media_url FROM instagram_dm_messages m WHERE m.conversation_id=d.id ORDER BY m.id DESC LIMIT 1) AS last_story_media_url
-        FROM instagram_dm_conversations d
-        JOIN ocs lo ON lo.id=d.oc_low_id
-        JOIN ocs hi ON hi.id=d.oc_high_id
-        WHERE lo.owner_id=? OR hi.owner_id=?
-        ORDER BY COALESCE((SELECT MAX(m.id) FROM instagram_dm_messages m WHERE m.conversation_id=d.id), 0) DESC""",
-        (user["id"], user["id"])).fetchall()
-    conversations = []
-    for row in rows:
-        item = dict(row)
-        if int(item["low_owner_id"]) == int(user["id"]):
-            item["my_oc"] = {"id": item["low_oc_id"], "name": item["low_name"], "username": item["low_username"], "avatar": item["low_avatar"]}
-            item["other_oc"] = {"id": item["high_oc_id"], "name": item["high_name"], "username": item["high_username"], "avatar": item["high_avatar"]}
-        else:
-            item["my_oc"] = {"id": item["high_oc_id"], "name": item["high_name"], "username": item["high_username"], "avatar": item["high_avatar"]}
-            item["other_oc"] = {"id": item["low_oc_id"], "name": item["low_name"], "username": item["low_username"], "avatar": item["low_avatar"]}
-        conversations.append(item)
-    c.close()
-    return render_template("instagram_dms.html", conversations=conversations, user=user)
-
-
-@app.route("/instagram/dms/new", methods=["GET", "POST"])
-@login_required
-def instagram_dm_new():
-    """Start an Instagram DM directly, without requiring a Story reply."""
-    user = current_user()
-    c = conn()
-    owned_ocs = c.execute(
-        "SELECT id, name, username, avatar FROM ocs WHERE owner_id=? ORDER BY name",
-        (user["id"],),
-    ).fetchall()
-    other_ocs = c.execute(
-        "SELECT id, name, username, avatar FROM ocs WHERE owner_id<>? ORDER BY username, name",
-        (user["id"],),
-    ).fetchall()
-    error = ""
-    if request.method == "POST":
-        try:
-            sender_id = int(request.form.get("sender_oc_id", ""))
-            recipient_id = int(request.form.get("recipient_oc_id", ""))
-        except (TypeError, ValueError):
-            sender_id = recipient_id = 0
-            error = "Choose both the OC sending the message and the OC receiving it."
-        sender = next((oc for oc in owned_ocs if int(oc["id"]) == sender_id), None)
-        recipient = next((oc for oc in other_ocs if int(oc["id"]) == recipient_id), None)
-        if not error and not sender:
-            error = "You can only send messages as one of your own OCs."
-        elif not error and not recipient:
-            error = "Choose an OC belonging to another account."
-        if not error:
-            try:
-                conversation_id = _get_or_create_instagram_dm(c, sender_id, recipient_id)
-                c.commit()
-                c.close()
-                return redirect(url_for("instagram_dm_conversation", conversation_id=conversation_id))
-            except Exception as exc:
-                c.rollback()
-                print(f"Could not start Instagram DM: {exc}")
-                error = "Couldn't start that conversation. Please try again."
-    selected_sender = request.form.get("sender_oc_id", "") if request.method == "POST" else request.args.get("as_oc_id", "")
-    selected_recipient = request.form.get("recipient_oc_id", "") if request.method == "POST" else request.args.get("to_oc_id", "")
-    if not selected_sender and owned_ocs:
-        selected_sender = str(owned_ocs[0]["id"])
-    c.close()
-    return render_template("instagram_dm_new.html", owned_ocs=owned_ocs, other_ocs=other_ocs,
-                           selected_sender=selected_sender, selected_recipient=selected_recipient,
-                           user=user, error=error)
-
-
-@app.route("/instagram/dms/<int:conversation_id>", methods=["GET", "POST"])
-@login_required
-def instagram_dm_conversation(conversation_id):
-    """Read or send a private Instagram DM with story previews and media."""
-    user = current_user()
-    c = conn()
-    conv = c.execute("""SELECT d.*,
-          lo.name AS low_name, lo.username AS low_username, lo.avatar AS low_avatar, lo.owner_id AS low_owner_id,
-          hi.name AS high_name, hi.username AS high_username, hi.avatar AS high_avatar, hi.owner_id AS high_owner_id
-        FROM instagram_dm_conversations d
-        JOIN ocs lo ON lo.id=d.oc_low_id
-        JOIN ocs hi ON hi.id=d.oc_high_id
-        WHERE d.id=?""", (conversation_id,)).fetchone()
-    if not conv:
-        c.close()
-        return "Instagram DM not found.", 404
-    low = {"id": conv["oc_low_id"], "name": conv["low_name"], "username": conv["low_username"], "avatar": conv["low_avatar"], "owner_id": conv["low_owner_id"]}
-    high = {"id": conv["oc_high_id"], "name": conv["high_name"], "username": conv["high_username"], "avatar": conv["high_avatar"], "owner_id": conv["high_owner_id"]}
-    if int(low["owner_id"]) == int(user["id"]):
-        my_oc, other_oc = low, high
-    elif int(high["owner_id"]) == int(user["id"]):
-        my_oc, other_oc = high, low
-    else:
-        c.close()
-        return "You aren't part of this Instagram DM.", 403
-
-    if request.method == "POST":
-        text = (request.form.get("text") or "").strip()[:2000]
-        image_url = ""
-        uploaded = request.files.get("media_file")
-        if uploaded and uploaded.filename:
-            ext = Path(uploaded.filename).suffix.lower()
-            if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
-                c.close()
-                return render_template("instagram_dm_conversation.html", conversation=conv, messages=[], user=user,
-                    my_oc=my_oc, other_oc=other_oc, error="Use a JPG, PNG, WEBP, or GIF image."), 400
-            uploaded.stream.seek(0, 2)
-            size = uploaded.stream.tell()
-            uploaded.stream.seek(0)
-            if size > 20 * 1024 * 1024:
-                c.close()
-                return render_template("instagram_dm_conversation.html", conversation=conv, messages=[], user=user,
-                    my_oc=my_oc, other_oc=other_oc, error="DM images must be 20 MB or smaller."), 400
-            try:
-                image_url = store_post_photo(uploaded, f"igdm_{conversation_id}_{uuid.uuid4().hex}{ext}")
-            except Exception as exc:
-                c.close()
-                print(f"Instagram DM media upload failed: {exc}")
-                return render_template("instagram_dm_conversation.html", conversation=conv, messages=[], user=user,
-                    my_oc=my_oc, other_oc=other_oc, error="The image couldn't be uploaded. Please try again."), 502
-        if not text and not image_url:
-            c.close()
-            return redirect(url_for("instagram_dm_conversation", conversation_id=conversation_id))
-        c.execute("""INSERT INTO instagram_dm_messages(conversation_id, sender_oc_id, text, image_url)
-            VALUES(?,?,?,?)""", (conversation_id, int(my_oc["id"]), text, image_url))
-        c.commit()
-        c.close()
-        return redirect(url_for("instagram_dm_conversation", conversation_id=conversation_id))
-
-    msg_rows = c.execute("""SELECT m.*, o.name AS sender_name, o.username AS sender_username,
-            o.avatar AS sender_avatar, o.owner_id AS sender_owner_id
-        FROM instagram_dm_messages m JOIN ocs o ON o.id=m.sender_oc_id
-        WHERE m.conversation_id=? ORDER BY m.id""", (conversation_id,)).fetchall()
-    messages = [dict(row) for row in msg_rows]
-    c.close()
-    return render_template("instagram_dm_conversation.html", conversation=conv, messages=messages,
-                           user=user, my_oc=my_oc, other_oc=other_oc, error="")
+    return jsonify(ok=True, replies=[dict(row) for row in rows])
 
 
 def _attach_post_media(posts):
@@ -1303,96 +964,6 @@ def twitter_profile(oc_id):
         is_owner=is_owner, is_following=is_following,
     )
 
-
-
-@app.route("/following")
-@login_required
-def following_feed():
-    """Show followed OCs' latest posts and the selected OC's following/follower lists."""
-    user = current_user()
-    c = conn()
-    owned_ocs = c.execute(
-        "SELECT id, name, username, avatar, owner_id FROM ocs WHERE owner_id=? ORDER BY name",
-        (user["id"],),
-    ).fetchall()
-    owned_ids = {int(row["id"]) for row in owned_ocs}
-    requested_oc_id = request.args.get("oc_id", type=int)
-    if requested_oc_id in owned_ids:
-        active_oc_id = requested_oc_id
-    else:
-        active_oc_id = int(owned_ocs[0]["id"]) if owned_ocs else None
-
-    view = (request.args.get("view", "feed") or "feed").lower()
-    if view not in {"feed", "following", "followers"}:
-        view = "feed"
-
-    following_ocs = []
-    follower_ocs = []
-    posts = []
-    stories = []
-    follower_count = 0
-    following_count = 0
-
-    if active_oc_id:
-        following_ocs = c.execute("""
-            SELECT o.id, o.name, o.username, o.avatar, o.bio, o.owner_id, f.created_at
-            FROM oc_follows f JOIN ocs o ON o.id=f.followed_oc_id
-            WHERE f.follower_oc_id=?
-            ORDER BY lower(o.username), lower(o.name)
-        """, (active_oc_id,)).fetchall()
-        follower_ocs = c.execute("""
-            SELECT o.id, o.name, o.username, o.avatar, o.bio, o.owner_id, f.created_at
-            FROM oc_follows f JOIN ocs o ON o.id=f.follower_oc_id
-            WHERE f.followed_oc_id=?
-            ORDER BY lower(o.username), lower(o.name)
-        """, (active_oc_id,)).fetchall()
-        following_count = len(following_ocs)
-        follower_count = len(follower_ocs)
-
-        # Feed is limited to posts from accounts this OC follows, across Instagram and Twitter/X.
-        if view == "feed":
-            posts = c.execute("""
-                SELECT p.*, o.name, o.username, o.avatar,
-                       o.id AS author_oc_id, o.owner_id AS author_owner_id,
-                       CASE WHEN p.platform='instagram' THEN
-                           (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id=p.id) +
-                           (SELECT COUNT(*) FROM oc_post_likes opl WHERE opl.post_id=p.id)
-                       ELSE
-                           (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id=p.id) +
-                           (SELECT COUNT(*) FROM oc_tweet_likes otl WHERE otl.post_id=p.id)
-                       END AS like_count
-                FROM posts p
-                JOIN ocs o ON o.id=p.oc_id
-                JOIN oc_follows f ON f.followed_oc_id=o.id AND f.follower_oc_id=?
-                WHERE p.platform IN ('instagram', 'twitter')
-                ORDER BY p.id DESC
-                LIMIT 100
-            """, (active_oc_id,)).fetchall()
-            posts = _attach_post_media(posts)
-            story_rows = c.execute("""
-                SELECT s.*, o.name, o.username, o.avatar, o.id AS author_oc_id
-                FROM stories s JOIN ocs o ON o.id=s.oc_id
-                JOIN oc_follows f ON f.followed_oc_id=o.id AND f.follower_oc_id=?
-                WHERE s.expires_at > CURRENT_TIMESTAMP
-                ORDER BY s.created_at DESC LIMIT 100
-            """, (active_oc_id,)).fetchall()
-            # The Following feed previews one bubble per OC, not one per slide.
-            stories = []
-            seen_story_oc_ids = set()
-            for story in story_rows:
-                story_oc_id = story["author_oc_id"]
-                if story_oc_id not in seen_story_oc_ids:
-                    seen_story_oc_ids.add(story_oc_id)
-                    stories.append(story)
-
-    c.close()
-    return render_template(
-        "following.html", user=user, owned_ocs=owned_ocs,
-        active_oc_id=active_oc_id, view=view, posts=posts,
-        following_ocs=following_ocs, follower_ocs=follower_ocs,
-        follower_count=follower_count, following_count=following_count,
-        stories=stories,
-    )
 
 @app.route("/messages")
 @login_required
@@ -1698,38 +1269,6 @@ def edit_oc(oc_id):
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         username = request.form.get("username", "").strip().lstrip("@")
-        avatar_url = request.form.get("avatar", "").strip()
-        uploaded_avatar = request.files.get("avatar_file")
-        if uploaded_avatar and uploaded_avatar.filename:
-            extension = Path(uploaded_avatar.filename).suffix.lower()
-            allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-            if extension not in allowed_extensions:
-                c.close()
-                return render_template(
-                    "oc_edit.html", oc=oc, user=user,
-                    error="Please upload a JPG, PNG, WEBP, or GIF profile photo."
-                )
-            uploaded_avatar.stream.seek(0, 2)
-            size = uploaded_avatar.stream.tell()
-            uploaded_avatar.stream.seek(0)
-            if size > 10 * 1024 * 1024:
-                c.close()
-                return render_template(
-                    "oc_edit.html", oc=oc, user=user,
-                    error="Profile photos must be 10 MB or smaller."
-                )
-            try:
-                avatar_url = store_post_photo(
-                    uploaded_avatar, f"avatar_{oc_id}_{uuid.uuid4().hex}{extension}"
-                )
-            except Exception as exc:
-                c.close()
-                print(f"OC profile photo upload failed: {exc}")
-                return render_template(
-                    "oc_edit.html", oc=oc, user=user,
-                    error="Could not upload the profile photo. Check Supabase Storage configuration and try again."
-                )
-
         banner_url = request.form.get("banner", "").strip()
         uploaded_banner = request.files.get("banner_file")
         if uploaded_banner and uploaded_banner.filename:
@@ -1766,8 +1305,9 @@ def edit_oc(oc_id):
         try:
             c.execute("""
               UPDATE ocs SET name=?,username=?,bio=?,avatar=?,banner=? WHERE id=? AND owner_id=?
-            """, (name, username, request.form.get("bio", "").strip(),
-                  avatar_url, banner_url, oc_id, user["id"]))
+            """, (name, username, request.form.get("bio","").strip(),
+                  request.form.get("avatar","").strip(), banner_url,
+                  oc_id, user["id"]))
             c.commit()
         except DB_INTEGRITY_ERRORS:
             c.close()
@@ -1781,31 +1321,13 @@ def edit_oc(oc_id):
 @app.route("/oc/<int:oc_id>")
 @login_required
 def profile(oc_id):
-    user = current_user()
     c = conn()
     oc = c.execute("SELECT * FROM ocs WHERE id=?", (oc_id,)).fetchone()
-    if not oc:
-        c.close()
-        return "Not found", 404
     posts = c.execute("SELECT * FROM posts WHERE oc_id=? AND platform='instagram' ORDER BY id DESC", (oc_id,)).fetchall()
-    posts = _attach_post_media(posts)
-    is_owner = int(oc["owner_id"]) == int(user["id"])
-    owned_ocs = c.execute("SELECT id, name, username, avatar FROM ocs WHERE owner_id=? ORDER BY name", (user["id"],)).fetchall()
-    mutual_connections = []
-    if int(oc["owner_id"]) != int(user["id"]):
-        mutual_connections = c.execute("""SELECT DISTINCT mutual.id, mutual.name, mutual.username, mutual.avatar
-            FROM oc_follows follows_target
-            JOIN ocs mutual ON mutual.id=follows_target.follower_oc_id
-            JOIN oc_follows actor_follows ON actor_follows.followed_oc_id=mutual.id
-            JOIN ocs actor ON actor.id=actor_follows.follower_oc_id
-            WHERE follows_target.followed_oc_id=? AND actor.owner_id=?
-              AND actor.id<>? AND mutual.id<>? AND mutual.owner_id<>?
-            ORDER BY mutual.username""",
-            (oc_id, user["id"], oc_id, oc_id, user["id"])).fetchall()
     c.close()
-    return render_template("profile.html", oc=oc, posts=posts, user=user, owned_ocs=owned_ocs,
-                           is_owner=is_owner, mutual_connections=mutual_connections,
-                           mutual_count=len(mutual_connections))
+    if not oc:
+        return "Not found", 404
+    return render_template("profile.html", oc=oc, posts=posts, user=current_user())
 
 
 @app.route("/api/oc-follow", methods=["POST"])
@@ -1865,30 +1387,6 @@ def toggle_oc_follow():
     ).fetchone()[0]
     c.close()
     return jsonify(ok=True, following=following, followers=followers, following_count=following_count)
-
-
-@app.route("/api/oc-remove-follower", methods=["POST"])
-@login_required
-def remove_oc_follower():
-    """Let an OC owner remove another OC's follow from their own OC."""
-    data = request.get_json(silent=True) or request.form
-    try:
-        target_oc_id = int(data.get("target_oc_id"))
-        follower_oc_id = int(data.get("follower_oc_id"))
-    except (TypeError, ValueError):
-        return jsonify(error="Invalid follower selection."), 400
-    user = current_user()
-    c = conn()
-    target = c.execute("SELECT id FROM ocs WHERE id=? AND owner_id=?", (target_oc_id, user["id"])).fetchone()
-    follower = c.execute("SELECT id FROM ocs WHERE id=?", (follower_oc_id,)).fetchone()
-    if not target or not follower:
-        c.close()
-        return jsonify(error="You can only remove a follower from one of your own OCs."), 403
-    c.execute("DELETE FROM oc_follows WHERE follower_oc_id=? AND followed_oc_id=?", (follower_oc_id, target_oc_id))
-    c.commit()
-    followers = c.execute("SELECT COUNT(*) FROM oc_follows WHERE followed_oc_id=?", (target_oc_id,)).fetchone()[0]
-    c.close()
-    return jsonify(ok=True, followers=followers)
 
 
 @app.route("/api/post/delete", methods=["POST"])
@@ -2210,7 +1708,6 @@ def api_reply_like():
 @app.route("/api/reply", methods=["POST"])
 @login_required
 def reply():
-    # Accept ordinary form/JSON comments plus multipart photo or GIF attachments.
     data = request.get_json(silent=True) or request.form
     try:
         oc_id = int(data["oc_id"])
@@ -2225,43 +1722,8 @@ def reply():
         return jsonify(error="Invalid comment reply"), 400
 
     text = (data.get("text") or "").strip()
-    uploaded = request.files.get("media_file")
-    has_upload = bool(uploaded and uploaded.filename)
-    raw_media_url = (data.get("media_url") or "").strip()
-    if has_upload and raw_media_url:
-        return jsonify(error="Choose an uploaded photo/GIF or a direct GIF URL, not both."), 400
-    if not text and not has_upload and not raw_media_url:
-        return jsonify(error="Write a comment or attach a photo/GIF first."), 400
-
-    media_url = ""
-    media_type = ""
-    if raw_media_url:
-        parsed = urllib.parse.urlparse(raw_media_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return jsonify(error="Enter a direct HTTP or HTTPS media URL."), 400
-        suffix = Path(parsed.path).suffix.lower()
-        if suffix not in {".gif", ".png", ".jpg", ".jpeg", ".webp"}:
-            return jsonify(error="Use a direct GIF or image URL ending in .gif, .png, .jpg, .jpeg, or .webp."), 400
-        media_url = raw_media_url
-        media_type = "gif" if suffix == ".gif" else "image"
-
-    if has_upload:
-        extension = Path(secure_filename(uploaded.filename or "")).suffix.lower()
-        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-        if extension not in allowed_extensions:
-            return jsonify(error="Comments support JPG, PNG, WEBP, or GIF files."), 400
-        uploaded.stream.seek(0, os.SEEK_END)
-        media_size = uploaded.stream.tell()
-        uploaded.stream.seek(0)
-        if media_size > 10 * 1024 * 1024:
-            return jsonify(error="Photo/GIF comments must be 10 MB or smaller."), 413
-        stored_name = f"comment_{uuid.uuid4().hex}{extension}"
-        try:
-            media_url = store_post_photo(uploaded, stored_name)
-        except Exception as exc:
-            print(f"Comment media upload failed: {exc}")
-            return jsonify(error="Couldn't upload that photo/GIF. Please try again."), 502
-        media_type = "gif" if extension == ".gif" else "image"
+    if not text:
+        return jsonify(error="Write a reply first"), 400
 
     c = conn()
     oc = c.execute(
@@ -2272,7 +1734,7 @@ def reply():
         c.close()
         return jsonify(error="You don't own that OC"), 403
 
-    post = c.execute("SELECT id FROM posts WHERE id=? AND platform IN ('instagram','twitter')", (post_id,)).fetchone()
+    post = c.execute("SELECT id FROM posts WHERE id=?", (post_id,)).fetchone()
     if not post:
         c.close()
         return jsonify(error="Post not found"), 404
@@ -2286,8 +1748,8 @@ def reply():
             return jsonify(error="That comment does not belong to this post"), 400
 
     c.execute(
-        "INSERT INTO replies(post_id,oc_id,text,parent_id,media_url,media_type) VALUES(?,?,?,?,?,?)",
-        (post_id, oc_id, text, parent_id, media_url, media_type)
+        "INSERT INTO replies(post_id,oc_id,text,parent_id) VALUES(?,?,?,?)",
+        (post_id, oc_id, text, parent_id)
     )
     c.commit()
     c.close()
@@ -2301,10 +1763,13 @@ def delete_reply_comment(reply_id):
     user_id = int(current_user()["id"])
     c = conn()
     row = c.execute("""
-        SELECT r.id, r.post_id, r.parent_id, p.platform, o.owner_id
+        SELECT r.id, r.post_id, r.parent_id, p.platform,
+               o.owner_id AS reply_owner_id,
+               post_author.owner_id AS post_owner_id
         FROM replies r
         JOIN posts p ON p.id=r.post_id
         JOIN ocs o ON o.id=r.oc_id
+        JOIN ocs post_author ON post_author.id=p.oc_id
         WHERE r.id=?
     """, (reply_id,)).fetchone()
     if not row:
@@ -2313,9 +1778,15 @@ def delete_reply_comment(reply_id):
     if str(row["platform"]).lower() not in {"instagram", "twitter"}:
         c.close()
         return "This comment cannot be deleted here", 400
-    if int(row["owner_id"]) != user_id:
+    # A commenter may delete their own comment; the owner of the original
+    # post may also moderate comments and replies on that post.
+    can_delete = (
+        int(row["reply_owner_id"]) == user_id
+        or int(row["post_owner_id"]) == user_id
+    )
+    if not can_delete:
         c.close()
-        return "You can only delete comments made by your own OCs.", 403
+        return "You can only delete your own comments or comments on your own post.", 403
 
     # Keep other people's replies visible if a parent comment is removed.
     c.execute("UPDATE replies SET parent_id=NULL WHERE parent_id=?", (reply_id,))
